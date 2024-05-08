@@ -55,12 +55,15 @@ class _OtpState extends State<Otp> with TickerProviderStateMixin {
 
 //navigate
   navigate(verify) {
+
     if (verify == true) {
+      debugPrint("Sanjay2");
       Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const Maps()),
           (route) => false);
     } else if (verify == false) {
+      debugPrint("Sanjay3");
       if (isverifyemail == true) {
         currentPage = 3;
         valueNotifierLogin.incrementNotifier();
@@ -93,6 +96,7 @@ class _OtpState extends State<Otp> with TickerProviderStateMixin {
     values = 0;
 
     var verify = await verifyUser(phnumber);
+
     navigate(verify);
   }
 
@@ -100,6 +104,7 @@ class _OtpState extends State<Otp> with TickerProviderStateMixin {
     values = 1;
 
     var verify = await verifyUser(phnumber);
+
     // var register = await registerUser();
     if (verify == false) {
       _pinPutController2.text = '123456';
@@ -123,6 +128,7 @@ class _OtpState extends State<Otp> with TickerProviderStateMixin {
       await FirebaseAuth.instance.signInWithCredential(credentials);
 
       var verify = await verifyUser(phnumber);
+
       credentials = null;
       navigate(verify);
     } on FirebaseAuthException catch (error) {
@@ -330,6 +336,7 @@ class _OtpState extends State<Otp> with TickerProviderStateMixin {
                             if (phoneAuthCheck == false) {
                               values = 0;
                               var verify = await verifyUser(phnumber);
+
                               navigate(verify);
                             } else {
                               // firebase code send true
@@ -345,6 +352,7 @@ class _OtpState extends State<Otp> with TickerProviderStateMixin {
                                 values = 0;
 
                                 var verify = await verifyUser(phnumber);
+
                                 navigate(verify);
                               } on FirebaseAuthException catch (error) {
                                 if (error.code == 'invalid-verification-code') {

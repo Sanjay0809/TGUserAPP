@@ -42,7 +42,7 @@ bool internet = true;
 //base url
 String url =
     'https://tuffygo.com/'; //add '/' at the end of the url as 'https://url.com/'
-String mapkey = 'AIzaSyCfTVc37K1LVSCAcbT0vIJS2AJsu0Mc49c';
+String mapkey = 'AIzaSyBJtwIWhx0LszJSBOwDBvHoOMmPtjNKTDE';
 
 //check internet connection
 
@@ -452,7 +452,30 @@ updateReferral() async {
     }
   }
 }
+//call fast 2 sms OTP
+Future<bool> sendOTP(String phoneNumber, String otp) async {
+  String apiKey = 'YOUR_FAST2SMS_API_KEY'; // Securely store and retrieve
+  String senderId = 'YOUR_SENDER_ID'; // Your Fast2SMS sender ID
+  String route = 'p'; // Default promotional route for Fast2SMS
+  String message = 'Your OTP code is: $otp';
 
+  final response = await http.post(
+    Uri.parse('https://www.fast2sms.com/dev/bulkV2'),
+    headers: {
+      'Authorization': apiKey,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: {
+      'route': route,
+      'sender_id': senderId,
+      'message': message,
+      'language': 'english',
+      'numbers': phoneNumber,
+    },
+  );
+
+  return response.statusCode == 200;
+}
 //call firebase otp
 
 otpCall() async {
@@ -460,6 +483,7 @@ otpCall() async {
   try {
     var otp = await FirebaseDatabase.instance.ref().child('call_FB_OTP').get();
     result = otp;
+
   } catch (e) {
     if (e is SocketException) {
       internet = false;
@@ -483,15 +507,20 @@ verifyUser(String number) async {
       val = jsonDecode(response.body)['success'];
 
       if (val == true) {
+
         var check = await userLogin();
         if (check == true) {
           var uCheck = await getUserDetails();
           val = uCheck;
+          return true;
         } else {
           val = false;
+          return false;
         }
+
       } else {
         val = false;
+        return false;
       }
     } else if (response.statusCode == 422) {
       debugPrint(response.body);
@@ -504,8 +533,10 @@ verifyUser(String number) async {
     } else {
       debugPrint(response.body);
       val = jsonDecode(response.body)['message'];
+      return val;
     }
-    return val;
+
+
   } catch (e) {
     if (e is SocketException) {
       internet = false;
@@ -987,18 +1018,53 @@ class AddressList {
 
 List<LatLng> polyList = [];
 
+int countlist=0;
 getPolylines() async {
-  polyList.clear();
+  if(countlist<1){
+    polyList.clear();
+  }
+
   String pickLat = '';
   String pickLng = '';
   String dropLat = '';
   String dropLng = '';
 
   for (var i = 1; i < addressList.length; i++) {
-    pickLat = addressList[i - 1].latlng.latitude.toString();
-    pickLng = addressList[i - 1].latlng.longitude.toString();
-    dropLat = addressList[i].latlng.latitude.toString();
-    dropLng = addressList[i].latlng.longitude.toString();
+
+    if (userRequestData['accepted_at'] ==
+        null) {
+      pickLat = addressList[i - 1].latlng.latitude.toString();
+      pickLng = addressList[i - 1].latlng.longitude.toString();
+      dropLat = addressList[i].latlng.latitude.toString();
+      dropLng = addressList[i].latlng.longitude.toString();
+
+    }else{
+
+String lat="drivers/driver_${userRequestData['driverDetail']['data']['id']}/l/0";
+String lan="drivers/driver_${userRequestData['driverDetail']['data']['id']}/l/1";
+      pickLat = addressList[i - 1].latlng.latitude.toString();
+      pickLng = addressList[i - 1].latlng.longitude.toString();
+try {
+  DatabaseReference latRef = FirebaseDatabase.instance.ref().child(lat);
+  DatabaseReference lngRef = FirebaseDatabase.instance.ref().child(lan);
+
+  DataSnapshot latSnapshot = await latRef.get();
+  DataSnapshot lngSnapshot = await lngRef.get();
+
+  if (latSnapshot.exists && lngSnapshot.exists) {
+     dropLat = latSnapshot.value.toString();
+    dropLng = lngSnapshot.value.toString();
+
+    debugPrint("Sanjay: Lat - $dropLat, Lng - $dropLng");
+  } else {
+    debugPrint("Sanjay Data not found in Firebase.");
+  }
+} catch (e) {
+  debugPrint("Sanjay  Error fetching data: $e");
+}
+
+
+    }
 
     try {
       var response = await http.get(Uri.parse(
@@ -1018,16 +1084,18 @@ getPolylines() async {
   }
   return polyList;
 }
-
+LatLng _driverLocation = LatLng(driverData['l'][0],driverData['l'][1],);
 //polyline decode
 
 Set<Polyline> polyline = {};
-
+Set<Polyline> driverpolyline = {};
+Set<Marker> markers2 = {};
 List<PointLatLng> decodeEncodedPolyline(String encoded) {
   List<PointLatLng> poly = [];
   int index = 0, len = encoded.length;
   int lat = 0, lng = 0;
-  polyline.clear();
+ polyline.clear();
+ driverpolyline.clear();
 
   while (index < len) {
     int b, shift = 0, result = 0;
@@ -1055,7 +1123,15 @@ List<PointLatLng> decodeEncodedPolyline(String encoded) {
   polyline.add(
     Polyline(
         polylineId: const PolylineId('1'),
-        color: const Color(0xffFD9898),
+        color: const Color(0xff28eae5),
+        visible: true,
+        width: 4,
+        points: polyList),
+  );
+  driverpolyline.add(
+    Polyline(
+        polylineId: const PolylineId('1'),
+        color: const Color(0xffe5bd1b),
         visible: true,
         width: 4,
         points: polyList),

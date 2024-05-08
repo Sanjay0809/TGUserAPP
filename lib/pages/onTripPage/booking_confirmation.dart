@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/cupertino.dart';
@@ -29,9 +30,26 @@ import '../noInternet/noInternet.dart';
 import 'drop_loc_select.dart';
 import 'invoice.dart';
 import 'map_page.dart';
+import 'package:http/http.dart' as http;
 int fg=1;
 TextEditingController searchController = TextEditingController();
 String search = '';
+
+Set<Marker> _markers = {};
+
+int count=0;
+
+
+
+// Simulated user and destination locations
+LatLng _pickupLocation = LatLng(userRequestData['pick_lat'], userRequestData['pick_lng']);
+LatLng _destinationLocation = LatLng(userRequestData['drop_lat'], userRequestData['drop_lng']);
+
+// Simulated driver's current location
+LatLng _driverLocation = LatLng(driverData['l'][0],driverData['l'][1],);
+
+
+
 List cars=[
 
   {'name': 'Roshan','price':200},
@@ -141,6 +159,8 @@ class _BookingConfirmationState extends State<BookingConfirmation>
 
   @override
   void initState() {
+
+
     WidgetsBinding.instance.addObserver(this);
     driverRequest();
     promoCode = '';
@@ -291,6 +311,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
 
 //running timer
   timer() {
+
     timing = userRequestData['maximum_time_for_find_drivers_for_regular_ride'];
     if (mounted) {
       timers = Timer.periodic(const Duration(seconds: 1), (timer) async {
@@ -524,6 +545,8 @@ class _BookingConfirmationState extends State<BookingConfirmation>
 
 //add drop marker
   addPickDropMarker() async {
+    count=count+1;
+    debugPrint("addPickupDrop"+count.toString());
     addMarker();
     // Future.delayed(const Duration(milliseconds: 200), () async {
     if (userRequestData.isNotEmpty &&
@@ -534,7 +557,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
         polyline.add(
           Polyline(
               polylineId: const PolylineId('1'),
-              color: buttonColor,
+              color: Colors.greenAccent,
               points: [
                 addressList
                     .firstWhere((element) => element.id == 'pickup')
@@ -550,7 +573,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
         polyline.add(
           Polyline(
               polylineId: const PolylineId('1'),
-              color: buttonColor,
+              color: Colors.greenAccent,
               points: [
                 LatLng(double.parse(userRequestData['pick_lat'].toString()),
                     double.parse(userRequestData['pick_lng'].toString())),
@@ -563,13 +586,16 @@ class _BookingConfirmationState extends State<BookingConfirmation>
       }
 
       getPolylines();
+
+
+
     } else if (widget.type == null) {
       addDropMarker();
       if (userRequestData.isEmpty) {
         polyline.add(
           Polyline(
               polylineId: const PolylineId('1'),
-              color: buttonColor,
+              color: Colors.greenAccent,
               points: [
                 addressList
                     .firstWhere((element) => element.type == 'pickup')
@@ -585,7 +611,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
         polyline.add(
           Polyline(
               polylineId: const PolylineId('1'),
-              color: buttonColor,
+              color: Colors.greenAccent,
               points: [
                 LatLng(double.parse(userRequestData['pick_lat'].toString()),
                     double.parse(userRequestData['pick_lng'].toString())),
@@ -598,6 +624,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
       }
 
       await getPolylines();
+
     } else {
       if (userRequestData.isNotEmpty) {
         CameraUpdate cameraUpdate = CameraUpdate.newLatLng(
@@ -686,6 +713,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
       _controller = controller;
       _controller?.setMapStyle(mapStyle);
     });
+
   }
 
   @override
@@ -1035,6 +1063,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                         }
 
                         return StreamBuilder<DatabaseEvent>(
+
                             stream: (userRequestData['driverDetail'] != null &&
                                 pinLocationIcon != null)
                                 ? FirebaseDatabase.instance
@@ -1047,8 +1076,10 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                 (context, AsyncSnapshot<DatabaseEvent> event) {
                               if (event.hasData) {
                                 if (event.data!.snapshot.value != null) {
+
                                   if (userRequestData['accepted_at'] != null) {
                                     driversData.clear();
+
                                     if (myMarker.length > 3) {
                                       myMarker.removeWhere((element) => element
                                           .markerId
@@ -1060,11 +1091,16 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                         event.data!.snapshot;
                                     // ignore: unnecessary_null_comparison
                                     if (snapshots != null) {
+                                      Future.delayed(const Duration(milliseconds: 2000), () async {
+                                        await addPickDropMarker();
+                                      });
                                       driverData = jsonDecode(
                                           jsonEncode(snapshots.value));
                                       if (userRequestData != {}) {
                                         if (userRequestData['arrived_at'] ==
                                             null) {
+
+
                                           var distCalc = calculateDistance(
                                               userRequestData['pick_lat'],
                                               userRequestData['pick_lng'],
@@ -1214,16 +1250,25 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                       MediaQuery.of(context)
                                                           .padding
                                                           .top),
-                                              onMapCreated: _onMapCreated,
+                                              onMapCreated:
+                                              (userRequestData['arrived_at'] == null) ?  _onMapCreated:
+
+                                                  (GoogleMapController controller) {
+                                                _controller = controller;
+                                                _controller?.setMapStyle(mapStyle);
+
+                                              },
                                               compassEnabled: false,
-                                              initialCameraPosition:
-                                              CameraPosition(
-                                                target: _center,
-                                                zoom: 11.0,
-                                              ),
-                                              markers:
-                                              Set<Marker>.from(myMarker),
-                                              polylines: polyline,
+                                              initialCameraPosition:CameraPosition(
+                                                  target: _center,
+                                                  zoom: 10),
+                                             // markers: markers2,
+                                              polylines:
+
+                                              (userRequestData['accepted_at'] != null) ?
+
+                                              driverpolyline:polyline,
+
                                               minMaxZoomPreference:
                                               const MinMaxZoomPreference(
                                                   0.0, 20.0),
@@ -1531,1305 +1576,84 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                               .viewInsets
                                               .bottom,
                                       child: AnimatedContainer(
-                                        duration: const Duration(
-                                            milliseconds: 200),
-                                        padding: EdgeInsets.only(
-                                            top: media.width * 0.02,
-                                            bottom: media.width * 0.02),
-                                        width: media.width * 1,
-                                        height:
-                                        (bottomChooseMethod == false &&
-                                            widget.type != 1)
-                                            ? media.width * 1.1
-                                            : (bottomChooseMethod ==
-                                            false &&
-                                            widget.type == 1)
-                                            ? media.height * 0.6
-                                            : media.height * 0.9,
-                                        decoration: BoxDecoration(
-                                            borderRadius:
-                                            const BorderRadius.only(
-                                                topLeft:
-                                                Radius.circular(48),
-                                                topRight:
-                                                Radius.circular(
-                                                    48)),
-                                            color: page),
-                                        child: Column(
-                                          children: [
-                                            SizedBox(
-                                              height: media.width * 0.03,
-                                            ),
-                                            SizedBox(
-                                              width: media.width * 1,
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                MainAxisAlignment.start,
-                                                children: [
-                                                  Container(
-                                                    margin: EdgeInsets.only(
-                                                        left: media.width *
-                                                            0.05,
-                                                        right: media.width *
-                                                            0.05),
-                                                    width:
-                                                    media.width * 0.9,
-                                                    child: MyText(
-                                                      text: languages[
-                                                      choosenLanguage]
-                                                      [
-                                                      'text_availablerides'],
-                                                      size: media.width *
-                                                          fourteen,
-                                                      fontweight:
-                                                      FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            SizedBox(
-                                              height: media.width * 0.02,
-                                            ),
-                                            (etaDetails.isNotEmpty &&
-                                                widget.type != 1)
-                                                ? Expanded(
-                                              child: SizedBox(
-                                                  width:
-                                                  media.width * 1,
-                                                  // height:
-                                                  //     media.width *
-                                                  //         0.4,
-                                                  child:
-                                                  SingleChildScrollView(
-                                                      physics:
-                                                      const BouncingScrollPhysics(),
-                                                      child:
-                                                      Column(
-                                                        children: [
-                                                          Column(
-                                                            children: etaDetails
-                                                                .asMap()
-                                                                .map((i, value) {
-                                                              return MapEntry(
-                                                                  i,
-                                                                  StreamBuilder<DatabaseEvent>(
-                                                                      stream: fdb.onValue,
-                                                                      builder: (context, AsyncSnapshot event) {
-                                                                        if (event.data != null) {
-                                                                          minutes[etaDetails[i]['type_id']] = '';
-                                                                          List vehicleList = [];
-                                                                          List vehicles = [];
-                                                                          List<double> minsList = [];
-                                                                          event.data!.snapshot.children.forEach((e) {
-                                                                            vehicleList.add(e.value);
-                                                                          });
-                                                                          if (vehicleList.isNotEmpty) {
-                                                                            // ignore: avoid_function_literals_in_foreach_calls
-                                                                            vehicleList.forEach(
-                                                                                  (e) async {
-                                                                                if (e['is_active'] == 1 && e['is_available'] == true && ((e['vehicle_types'] != null && e['vehicle_types'].contains(etaDetails[i]['type_id'])) || e['vehicle_type'] == etaDetails[i]['type_id'])) {
-                                                                                  DateTime dt = DateTime.fromMillisecondsSinceEpoch(e['updated_at']);
-                                                                                  if (DateTime.now().difference(dt).inMinutes <= 2) {
-                                                                                    vehicles.add(e);
-                                                                                    if (vehicles.isNotEmpty) {
-                                                                                      var dist = calculateDistance(addressList.firstWhere((e) => e.type == 'pickup').latlng.latitude, addressList.firstWhere((e) => e.type == 'pickup').latlng.longitude, e['l'][0], e['l'][1]);
-
-                                                                                      minsList.add(double.parse((dist / 1000).toString()));
-                                                                                      var minDist = minsList.reduce(min);
-                                                                                      if (minDist > 0 && minDist <= 1) {
-                                                                                        minutes[etaDetails[i]['type_id']] = '2 mins';
-                                                                                      } else if (minDist > 1 && minDist <= 3) {
-                                                                                        minutes[etaDetails[i]['type_id']] = '5 mins';
-                                                                                      } else if (minDist > 3 && minDist <= 5) {
-                                                                                        minutes[etaDetails[i]['type_id']] = '8 mins';
-                                                                                      } else if (minDist > 5 && minDist <= 7) {
-                                                                                        minutes[etaDetails[i]['type_id']] = '11 mins';
-                                                                                      } else if (minDist > 7 && minDist <= 10) {
-                                                                                        minutes[etaDetails[i]['type_id']] = '14 mins';
-                                                                                      } else if (minDist > 10) {
-                                                                                        minutes[etaDetails[i]['type_id']] = '15 mins';
-                                                                                      }
-                                                                                    } else {
-                                                                                      minutes[etaDetails[i]['type_id']] = '';
-                                                                                    }
-                                                                                  }
-                                                                                }
-                                                                              },
-                                                                            );
-                                                                          } else {
-                                                                            minutes[etaDetails[i]['type_id']] = '';
-                                                                          }
-                                                                        } else {
-                                                                          minutes[etaDetails[i]['type_id']] = '';
-                                                                        }
-
-                                                                        //MINI BUTTON
-                                                                        return InkWell(
-                                                                          onTap: () async {
-                                                                            if ((widget.type ==
-                                                                                2) ||
-                                                                                (((rentalOption.isEmpty && (etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['total'] && etaDetails[choosenVehicle]['has_discount'] == false) || (rentalOption.isEmpty && etaDetails[choosenVehicle]['has_discount'] == true && etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['discounted_totel'])) ||
-                                                                                    (rentalOption.isEmpty &&
-                                                                                        etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[payingVia] !=
-                                                                                            'wallet')) ||
-                                                                                    ((rentalOption.isNotEmpty && (etaDetails[0]['user_wallet_balance'] >= rentalOption[choosenVehicle]['fare_amount']) && rentalOption[choosenVehicle]['has_discount'] == false) ||
-                                                                                        (rentalOption.isNotEmpty &&
-                                                                                            rentalOption[choosenVehicle]['has_discount'] ==
-                                                                                                true &&
-                                                                                            etaDetails[0]['user_wallet_balance'] >=
-                                                                                                rentalOption[choosenVehicle][
-                                                                                                'discounted_totel']) ||
-                                                                                        rentalOption.isNotEmpty &&
-                                                                                            rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[payingVia] !=
-                                                                                                'wallet'))) {
-                                                                              setState(() {
-                                                                                _isLoading =
-                                                                                true;
-                                                                              });
-                                                                              dropStopList
-                                                                                  .clear();
-                                                                              dynamic result;
-                                                                              if (choosenVehicle !=
-                                                                                  null) {
-                                                                                if (widget
-                                                                                    .type !=
-                                                                                    1) {
-                                                                                  if (etaDetails[
-                                                                                  choosenVehicle]
-                                                                                  [
-                                                                                  'has_discount'] ==
-                                                                                      false) {
-                                                                                    if (addressList
-                                                                                        .length >
-                                                                                        2) {
-                                                                                      for (var i =
-                                                                                      1;
-                                                                                      i < addressList.length;
-                                                                                      i++) {
-                                                                                        dropStopList.add(DropStops(
-                                                                                            order:
-                                                                                            i.toString(),
-                                                                                            latitude: addressList[i].latlng.latitude,
-                                                                                            longitude: addressList[i].latlng.longitude,
-                                                                                            address: addressList[i].address));
-                                                                                      }
-                                                                                    }
-                                                                                    result =
-                                                                                    await createRequest();
-                                                                                    if (result ==
-                                                                                        'logout') {
-                                                                                      navigateLogout();
-                                                                                    }
-                                                                                  } else {
-                                                                                    if (addressList
-                                                                                        .length >
-                                                                                        2) {
-                                                                                      for (var i =
-                                                                                      1;
-                                                                                      i < addressList.length;
-                                                                                      i++) {
-                                                                                        dropStopList.add(DropStops(
-                                                                                            order:
-                                                                                            i.toString(),
-                                                                                            latitude: addressList[i].latlng.latitude,
-                                                                                            longitude: addressList[i].latlng.longitude,
-                                                                                            address: addressList[i].address));
-                                                                                      }
-                                                                                    }
-                                                                                    result =
-                                                                                    await createRequestWithPromo();
-                                                                                    if (result ==
-                                                                                        'logout') {
-                                                                                      navigateLogout();
-                                                                                    }
-                                                                                  }
-                                                                                } else {
-                                                                                  if (rentalOption[
-                                                                                  choosenVehicle]
-                                                                                  [
-                                                                                  'has_discount'] ==
-                                                                                      false) {
-                                                                                    result =
-                                                                                    await createRentalRequest();
-                                                                                    if (result ==
-                                                                                        'logout') {
-                                                                                      navigateLogout();
-                                                                                    }
-                                                                                  } else {
-                                                                                    result =
-                                                                                    await createRentalRequestWithPromo();
-                                                                                    if (result ==
-                                                                                        'logout') {
-                                                                                      navigateLogout();
-                                                                                    }
-                                                                                  }
-                                                                                }
-                                                                              }
-                                                                              if (result ==
-                                                                                  'success') {
-                                                                                timer();
-                                                                              }
-                                                                              setState(() {
-                                                                                _isLoading =
-                                                                                false;
-                                                                              });
-                                                                            } else {
-                                                                              setState(() {
-                                                                                islowwalletbalance =
-                                                                                true;
-                                                                              });
-                                                                            }
-                                                                          },
-                                                                          child: Container(
-                                                                            padding: EdgeInsets.all(media.width * 0.02),
-                                                                            margin: EdgeInsets.only(top: 10, left: media.width * 0.05, right: media.width * 0.05),
-                                                                            height: media.width * 0.157,
-                                                                            decoration: BoxDecoration(
-                                                                                borderRadius: BorderRadius.circular(12),
-                                                                                // boxShadow: [
-                                                                                //   BoxShadow(color: (isDarkTheme == true) ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.2), spreadRadius: 2, blurRadius: 2)
-                                                                                // ],
-                                                                                color: Colors.white12
-
-                                                                              // (choosenVehicle != i)
-                                                                              //     ? (isDarkTheme == true)
-                                                                              //         ? Colors.black
-                                                                              //         : Colors.white
-                                                                              //     : const Color.fromARGB(255, 174, 172, 172),
-                                                                            ),
-                                                                            child: Row(
-                                                                              children: [
-
-                                                                                SizedBox(
-                                                                                  width: 8,
-                                                                                ),
-
-                                                                                //Icon of cars
-
-                                                                                Container(
-                                                                                  height:24,
-                                                                                  width: 24,
-                                                                                  child:  Image.asset('assets/images/1.png') ,
-                                                                                ),
-
-                                                                                // (etaDetails[i]['icon'] != null)
-                                                                                //     ? SizedBox(
-                                                                                //         width: media.width * 0.1,
-                                                                                //         child: Image.network(
-                                                                                //           etaDetails[i]['icon'],
-                                                                                //           fit: BoxFit.contain,
-                                                                                //         ))
-                                                                                //     : Container(),
-                                                                                SizedBox(
-                                                                                  width: media.width * 0.05,
-                                                                                ),
-                                                                                Column(
-                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                                                                  children: [
-                                                                                    Text(etaDetails[i]['name'],
-                                                                                        style: GoogleFonts.notoSans(
-                                                                                          fontSize: media.width * fourteen,
-                                                                                          fontWeight: FontWeight.w600,
-                                                                                          color: Colors.white,
-                                                                                          // (choosenVehicle != i)
-                                                                                          //     ? (isDarkTheme == true)
-                                                                                          //         ? hintColor
-                                                                                          //         : textColor
-                                                                                          //     : Colors.white
-                                                                                        )
-                                                                                    ),
-                                                                                    // Row(
-                                                                                    //   children: [
-                                                                                    //     Icon(
-                                                                                    //       Icons.timelapse,
-                                                                                    //       size: media.width * 0.04,
-                                                                                    //       color: const Color(0xff8A8A8A),
-                                                                                    //     ),
-                                                                                    //     SizedBox(
-                                                                                    //       width: media.width * 0.01,
-                                                                                    //     ),
-                                                                                    //     (minutes[etaDetails[i]['type_id']] != null && minutes[etaDetails[i]['type_id']] != '')
-                                                                                    //         ? Text(
-                                                                                    //             minutes[etaDetails[i]['type_id']].toString(),
-                                                                                    //             style: GoogleFonts.notoSans(fontSize: media.width * twelve, color: const Color(0xff8A8A8A)),
-                                                                                    //           )
-                                                                                    //         : Text(
-                                                                                    //             '- -',
-                                                                                    //             style: GoogleFonts.notoSans(
-                                                                                    //                 fontSize: media.width * twelve,
-                                                                                    //                 color: (choosenVehicle != i)
-                                                                                    //                     ? textColor.withOpacity(0.7)
-                                                                                    //                     : (isDarkTheme)
-                                                                                    //                         ? Colors.black
-                                                                                    //                         : hintColor.withOpacity(0.4)),
-                                                                                    //           ),
-                                                                                    //     SizedBox(
-                                                                                    //       width: media.width * 0.01,
-                                                                                    //     ),
-                                                                                    //     InkWell(
-                                                                                    //         onTap: () {
-                                                                                    //           setState(() {
-                                                                                    //             _showInfoInt = i;
-                                                                                    //             _showInfo = true;
-                                                                                    //           });
-                                                                                    //         },
-                                                                                    //         child: Icon(
-                                                                                    //           Icons.info_outline,
-                                                                                    //           size: media.width * 0.04,
-                                                                                    //           color: const Color(0xff8A8A8A),
-                                                                                    //         ))
-                                                                                    //   ],
-                                                                                    // ),
-                                                                                  ],
-                                                                                ),
-
-                                                                                // Price of rides
-
-                                                                                (widget.type != 2)
-                                                                                    ? Expanded(
-                                                                                    child: (etaDetails[i]['has_discount'] != true)
-                                                                                        ? Row(
-                                                                                      mainAxisAlignment: MainAxisAlignment.end,
-                                                                                      children: [
-                                                                                        Text(
-                                                                                          etaDetails[i]['currency']
-                                                                                              + ' '  +
-                                                                                              // '${(isOutStation && daysDifferenceRoundedUp == 0) ?
-                                                                                              etaDetails[i]['total'].toStringAsFixed(2)
-                                                                                          // : (daysDifferenceRoundedUp != 0) ? (double.parse(etaDetails[i]['total'].toString()) * daysDifferenceRoundedUp).toStringAsFixed(2) : etaDetails[i]['total'].toStringAsFixed(2)} ${etaDetails[i]['currency']}'
-
-                                                                                          // daysDifferenceRoundedUp    etaDetails[i]['total'].toStringAsFixed(2)
-                                                                                          ,
-                                                                                          style: GoogleFonts.notoSans(
-                                                                                            fontSize: media.width * fourteen,
-                                                                                            fontWeight: FontWeight.w600,
-                                                                                            color: Colors.white,
-                                                                                            // (choosenVehicle != i)
-                                                                                            //     ? (isDarkTheme == true)
-                                                                                            //         ? Colors.white
-                                                                                            //         : textColor
-                                                                                            //     : Colors.black
-                                                                                          ),
-                                                                                        ),
-                                                                                      ],
-                                                                                    )
-                                                                                        : Row(
-                                                                                      mainAxisAlignment: MainAxisAlignment.end,
-                                                                                      children: [
-                                                                                        Text(
-                                                                                          etaDetails[i]['currency'] + ' ',
-                                                                                          style: GoogleFonts.notoSans(fontSize: media.width * fourteen, color: (choosenVehicle != i) ? Colors.white : Colors.black, fontWeight: FontWeight.w600),
-                                                                                        ),
-                                                                                        Column(
-                                                                                          children: [
-                                                                                            Text(
-                                                                                              etaDetails[i]['total'].toStringAsFixed(2),
-                                                                                              style: GoogleFonts.notoSans(
-                                                                                                  fontSize: media.width * fourteen,
-                                                                                                  color: (choosenVehicle != i)
-                                                                                                      ? (isDarkTheme == true)
-                                                                                                      ? Colors.white
-                                                                                                      : textColor
-                                                                                                      : Colors.black,
-                                                                                                  fontWeight: FontWeight.w600,
-                                                                                                  decoration: TextDecoration.lineThrough),
-                                                                                            ),
-                                                                                            Text(
-                                                                                              '${etaDetails[i]['discounted_totel'].toStringAsFixed(2)}',
-                                                                                              style: GoogleFonts.notoSans(
-                                                                                                  fontSize: media.width * fourteen,
-                                                                                                  color: (choosenVehicle != i)
-                                                                                                      ? (isDarkTheme == true)
-                                                                                                      ? Colors.white
-                                                                                                      : textColor
-                                                                                                      : Colors.black,
-                                                                                                  fontWeight: FontWeight.w600),
-                                                                                            )
-                                                                                          ],
-                                                                                        ),
-                                                                                      ],
-                                                                                    ))
-                                                                                    : Container()
-                                                                              ],
-                                                                            ),
-                                                                          ),
-                                                                        );
-                                                                      }));
-
-                                                            }
-                                                            )
-                                                                .values
-                                                                .toList(),
-                                                          ),
-
-                                                          //pro rider
-                                                          InkWell(
-                                                            onTap: () async {
-                                                              showModalBottomSheet<void>(
-                                                                isScrollControlled: true,
-                                                                context: context,
-                                                                builder: (BuildContext context) {
-                                                                  return Padding(
-                                                                    padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-                                                                    child: Container(
-                                                                      height: media.width * 3,
-                                                                      width: media.width * 1,
-                                                                      decoration: BoxDecoration(
-                                                                        borderRadius: const BorderRadius.only(
-                                                                          topLeft: Radius.circular(24),
-                                                                          topRight: Radius.circular(24),
-                                                                        ),
-                                                                        color: Colors.black,
-                                                                      ),
-                                                                      padding: EdgeInsets.all(media.width * 0.05),
-                                                                      child: Column(
-                                                                        children: [
-
-                                                                          SizedBox(
-                                                                            height: 32,
-                                                                          ),
-                                                                          Text(
-                                                                            'Select Your Captain',
-                                                                            style: GoogleFonts.notoSans(
-                                                                              color: Colors.white,
-                                                                              fontSize: 24,
-                                                                              fontWeight: FontWeight.bold,
-                                                                            ),
-                                                                          ),
-                                                                          Padding(
-                                                                            padding: const EdgeInsets.only(top: 8),
-                                                                            child: Row(
-                                                                              mainAxisAlignment: MainAxisAlignment.center,
-                                                                              children: [
-                                                                                SizedBox(
-                                                                                  width: MediaQuery.of(context).size.width * 0.9,
-                                                                                  height: 56,
-                                                                                  //Main PRO RIDER TEXT FIELD
-                                                                                  child: TextField(
-                                                                                    cursorColor: Colors.white,
-                                                                                     controller: searchController,
-                                                                                    style: TextStyle(color:Colors.white),
-                                                                                    decoration: InputDecoration(
-                                                                                      prefixIcon: Icon(Icons.search),
-                                                                                      fillColor: Colors.black.withOpacity(.8),
-                                                                                      focusColor: Colors.white,
-                                                                                      focusedBorder: OutlineInputBorder(
-                                                                                        borderSide: BorderSide(color: Colors.white), // Set the color for focused border
-                                                                                        borderRadius: BorderRadius.circular(24),
-                                                                                      ),
-                                                                                      border: OutlineInputBorder(
-                                                                                        borderRadius: BorderRadius.circular(24),
-                                                                                      ),
-                                                                                      hintText: 'Search By Name, Car Number, driver id..',
-                                                                                      hintStyle: GoogleFonts.notoSans(color: Colors.white24),
-                                                                                      filled: true,
-                                                                                    ),
-                                                                                    onChanged: (String? value){
-                                                                                      setState(() {
-                                                                                        search = value.toString();
-                                                                                      });
-                                                                                    },
-                                                                                  ),
-                                                                                ),
-                                                                                // SizedBox(width: MediaQuery.of(context).size.width * 0.01),
-                                                                                // Container(
-                                                                                //   height: 40,
-                                                                                //   width: 40,
-                                                                                //   decoration: BoxDecoration(
-                                                                                //     shape: BoxShape.circle,
-                                                                                //     color: Colors.white.withOpacity(.1),
-                                                                                //   ),
-                                                                                //   child: Icon(
-                                                                                //     Icons.downloading_sharp,
-                                                                                //     color: Colors.white60,
-                                                                                //   ),
-                                                                                // ),
-                                                                                // SizedBox(width: MediaQuery.of(context).size.width * 0.01),
-                                                                                // Container(
-                                                                                //   height: 40,
-                                                                                //   width: 40,
-                                                                                //   decoration: BoxDecoration(
-                                                                                //     shape: BoxShape.circle,
-                                                                                //     color: Colors.white.withOpacity(.1),
-                                                                                //   ),
-                                                                                //   child: Icon(Icons.receipt_long_rounded, color: Colors.white60),
-                                                                                // ),
-                                                                              ],
-                                                                            ),
-                                                                          ),
-                                                                          SizedBox(
-                                                                            height: 22,
-                                                                          ),
-
-                                                                          Expanded(
-                                                                            child: ListView.separated(
-                                                                              itemCount: driverDetails.length,
-                                                                              separatorBuilder: (BuildContext context, int index) {
-                                                                                return SizedBox(height: 16); // Adjust the height according to your preference
-                                                                              },
-                                                                              itemBuilder: (BuildContext context, int index) {
-                                                                                return Column(
-                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                  mainAxisAlignment: MainAxisAlignment.start,
-                                                                                  children: [
-                                                                                    ListView.builder(
-                                                                                      shrinkWrap: true,
-                                                                                      physics: NeverScrollableScrollPhysics(),
-                                                                                      itemCount: driverDetails[index]['drivers'].length,
-                                                                                      itemBuilder: (BuildContext context, int driverIndex) {
-
-                                                                                        final driver = driverDetails[index]['drivers'][driverIndex];
-                                                                                        late String name =  driver['name'];
-                                                                                        if(searchController.text.isEmpty){
-
-
-                                                                                          return Container(
-
-                                                                                            child: driverDetails[index]['name'] == 'Mini'?
-                                                                                            Container(
-                                                                                              margin: EdgeInsets.symmetric(vertical: 8), // Add margin to create space between items
-                                                                                              decoration: BoxDecoration(
-                                                                                                color: Colors.white12,
-                                                                                                borderRadius: BorderRadius.circular(16),
-                                                                                              ),
-                                                                                              child: Padding(
-                                                                                                padding: const EdgeInsets.all(16.0),
-                                                                                                child: Column(
-                                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                  mainAxisAlignment: MainAxisAlignment.start,
-                                                                                                  children: [
-                                                                                                    Row(
-                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                                                      children: [
-                                                                                                        Text(
-                                                                                                          driver['name'],
-                                                                                                          style: GoogleFonts.notoSans(
-                                                                                                            color: Colors.white60,
-                                                                                                            fontSize: 24,
-                                                                                                            fontWeight: FontWeight.bold,
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                        Text(
-                                                                                                          'INR' + ' ' +   driverDetails[index]['total'].toStringAsFixed(2),
-                                                                                                          style: GoogleFonts.notoSans(color: Colors.white60),
-                                                                                                        ),
-                                                                                                      ],
-                                                                                                    ),
-                                                                                                    Text(
-                                                                                                      driverDetails[index]['name'],
-                                                                                                      style: TextStyle(
-                                                                                                        color: Colors.white60,
-                                                                                                        fontSize: 16,
-                                                                                                        fontWeight: FontWeight.bold,
-                                                                                                      ),
-                                                                                                    ),
-
-
-
-                                                                                                    Container(
-
-                                                                                                      child: driverDetails[index]['name'] == 'Mini'?  StarRating(
-                                                                                                        mainAxisAlignment: MainAxisAlignment
-                                                                                                            .start,
-                                                                                                        size: 24.0,
-                                                                                                        rating: driver['rating']
-                                                                                                            .toDouble(),
-
-                                                                                                        color: Colors
-                                                                                                            .white,
-                                                                                                        borderColor: Colors
-                                                                                                            .grey,
-                                                                                                        allowHalfRating: true,
-                                                                                                        starCount: 5,
-
-
-                                                                                                      ) : Container(
-
-                                                                                                      ),
-                                                                                                    ),
-
-                                                                                                    // StarRating(
-                                                                                                    //     mainAxisAlignment: MainAxisAlignment
-                                                                                                    //         .start,
-                                                                                                    //     size: 24.0,
-                                                                                                    //     rating: driver['rating']
-                                                                                                    //         .toDouble(),
-                                                                                                    //
-                                                                                                    //     color: Colors
-                                                                                                    //         .white,
-                                                                                                    //     borderColor: Colors
-                                                                                                    //         .grey,
-                                                                                                    //     allowHalfRating: true,
-                                                                                                    //     starCount: 5,
-                                                                                                    //
-                                                                                                    //
-                                                                                                    //   ),
-
-
-                                                                                                    SizedBox(height: 16),
-                                                                                                    Row(
-                                                                                                      children: [
-                                                                                                        SizedBox(
-                                                                                                          height: 56,
-                                                                                                          width: MediaQuery.of(context).size.width * 0.38,
-                                                                                                          child: ElevatedButton(
-                                                                                                            child: Text(
-                                                                                                              'Book Ride',
-                                                                                                              style: TextStyle(
-                                                                                                                color: Colors.white,
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                            onPressed: () async {
-                                                                                                              setState(() {
-                                                                                                                choosenVehicle = index;
-                                                                                                                choosenDriver = driverIndex;
-                                                                                                              });
-                                                                                                              // Handle button press
-                                                                                                              await createProRequest();
-                                                                                                              Navigator.pop(context); // Close the bottom sheet
-                                                                                                            },
-                                                                                                            style: ElevatedButton.styleFrom(
-                                                                                                              backgroundColor: Colors.black,
-                                                                                                              shape: RoundedRectangleBorder(
-                                                                                                                borderRadius: BorderRadius.circular(24),
-                                                                                                              ),
-                                                                                                              textStyle: TextStyle(
-                                                                                                                fontSize: 15,
-                                                                                                                fontWeight: FontWeight.bold,
-                                                                                                                color: Colors.white,
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                        SizedBox(width: MediaQuery.of(context).size.width * 0.066),
-                                                                                                        SizedBox(
-                                                                                                          height: 56,
-                                                                                                          width: MediaQuery.of(context).size.width * 0.36,
-                                                                                                          child: OutlinedButton(
-                                                                                                            child: Text(
-                                                                                                              'View Details',
-                                                                                                              style: TextStyle(
-                                                                                                                color: Colors.white,
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                            onPressed: () {
-
-
-
-
-                                                                                                              showModalBottomSheet<void>(
-
-                                                                                                                  context: context,
-                                                                                                                  builder: (BuildContext context) {
-
-                                                                                                                    return Container(
-                                                                                                                      height: media.height*.5 ,
-                                                                                                                      width: MediaQuery.of(context).size.width,
-                                                                                                                      decoration: BoxDecoration(
-                                                                                                                        color: Colors.black.withOpacity(.9),
-
-                                                                                                                      ),
-                                                                                                                      child:
-
-                                                                                                                      Padding(
-                                                                                                                        padding: const EdgeInsets.only(left:16,top:40,right: 16),
-                                                                                                                        child: Column(
-                                                                                                                          crossAxisAlignment: CrossAxisAlignment.center,
-                                                                                                                          children: [
-                                                                                                                            Container(
-                                                                                                                              height: MediaQuery.of(context).size.height * 0.2,
-                                                                                                                              width: MediaQuery.of(context).size.width * 0.4,
-                                                                                                                              decoration: BoxDecoration(
-                                                                                                                                  shape: BoxShape.circle
-                                                                                                                              ),
-
-                                                                                                                              child: Image.network(
-                                                                                                                                driver['profile_picture'],fit: BoxFit.cover, // URL of the image to be displayed
-                                                                                                                              ),
-                                                                                                                            ),
-                                                                                                                            SizedBox(height: MediaQuery.of(context).size.width*.025,),
-
-                                                                                                                            Text(driver['name'],
-                                                                                                                              style: GoogleFonts.notoSans(
-                                                                                                                                color: Colors.white,
-                                                                                                                                fontSize: 24,
-                                                                                                                                fontWeight: FontWeight.bold,
-                                                                                                                              ),),
-                                                                                                                            SizedBox(height: MediaQuery.of(context).size.width*.015,),
-                                                                                                                            Center(
-                                                                                                                              child: Row(
-                                                                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                                                                                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                                                children: [
-                                                                                                                                  Text('Vehicle Model:',
-                                                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                                                      color: Colors.white30,
-                                                                                                                                      fontSize:18,
-                                                                                                                                      fontWeight: FontWeight.w300,
-                                                                                                                                    ),),
-                                                                                                                                  // SizedBox(width: MediaQuery.of(context).size.width*.45,),
-                                                                                                                                  Text(driver['car_model_name'],
-                                                                                                                                    textAlign: TextAlign.left,
-                                                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                                                      color: Colors.white,
-                                                                                                                                      fontSize: 18,
-                                                                                                                                      fontWeight: FontWeight.w700,
-                                                                                                                                    ),),
-                                                                                                                                ],
-                                                                                                                              ),
-                                                                                                                            ),
-
-                                                                                                                            SizedBox(height: MediaQuery.of(context).size.width*.015,),
-
-                                                                                                                            Center(
-                                                                                                                              child: Row(
-                                                                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                                                                                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                                                children: [
-                                                                                                                                  Text('Vehicle No: ',
-                                                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                                                      color: Colors.white30,
-                                                                                                                                      fontSize: 18,
-                                                                                                                                      fontWeight: FontWeight.w300,
-                                                                                                                                    ),),
-                                                                                                                                  //SizedBox(width: MediaQuery.of(context).size.width*.45,),
-                                                                                                                                  Text(driver['car_number'],
-                                                                                                                                    textAlign: TextAlign.right,
-                                                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                                                      color: Colors.white,
-                                                                                                                                      fontSize: 18,
-                                                                                                                                      fontWeight: FontWeight.w700,
-                                                                                                                                    ),),
-                                                                                                                                ],
-                                                                                                                              ),
-                                                                                                                            ),
-                                                                                                                            SizedBox(height: MediaQuery.of(context).size.width*.015,),
-
-                                                                                                                            Center(
-                                                                                                                              child: Row(
-                                                                                                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                                                                                                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                                                children: [
-                                                                                                                                  Text('Vehicle Color: ',
-                                                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                                                      color: Colors.white30,
-                                                                                                                                      fontSize: 18,
-                                                                                                                                      fontWeight: FontWeight.w300,
-                                                                                                                                    ),),
-                                                                                                                                  // SizedBox(width: MediaQuery.of(context).size.width*.45,),
-                                                                                                                                  Text(driver['car_color'],
-                                                                                                                                    textAlign: TextAlign.right,
-                                                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                                                      color: Colors.white,
-                                                                                                                                      fontSize: 18,
-                                                                                                                                      fontWeight: FontWeight.w700,
-                                                                                                                                    ),),
-                                                                                                                                ],
-                                                                                                                              ),
-                                                                                                                            ),
-                                                                                                                            SizedBox(height: MediaQuery.of(context).size.width*.03,),
-                                                                                                                            //Driver Rating
-                                                                                                                            Center(
-                                                                                                                              child: Row(
-                                                                                                                                mainAxisAlignment: MainAxisAlignment.center,
-                                                                                                                                crossAxisAlignment: CrossAxisAlignment.center,
-                                                                                                                                children: [
-                                                                                                                                  StarRating(
-                                                                                                                                    mainAxisAlignment: MainAxisAlignment
-                                                                                                                                        .start,
-                                                                                                                                    size: 32.0,
-                                                                                                                                    rating: driver['rating']
-                                                                                                                                        .toDouble(),
-
-                                                                                                                                    color: Colors
-                                                                                                                                        .white,
-                                                                                                                                    borderColor: Colors
-                                                                                                                                        .grey,
-                                                                                                                                    allowHalfRating: true,
-                                                                                                                                    starCount: 5,
-
-
-                                                                                                                                  ),
-                                                                                                                                ],
-                                                                                                                              ),
-                                                                                                                            )
-                                                                                                                          ],
-                                                                                                                        ),
-                                                                                                                      ),
-                                                                                                                    );
-                                                                                                                  }
-                                                                                                              );
-                                                                                                            },
-                                                                                                            style: OutlinedButton.styleFrom(
-                                                                                                              shape: RoundedRectangleBorder(
-                                                                                                                borderRadius: BorderRadius.circular(24),
-                                                                                                              ),
-                                                                                                              textStyle: TextStyle(
-                                                                                                                fontSize: 15,
-                                                                                                                fontWeight: FontWeight.bold,
-                                                                                                              ),
-                                                                                                              side: BorderSide(
-                                                                                                                color: Colors.white,
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ),
-                                                                                                      ],
-                                                                                                    ),
-                                                                                                  ],
-                                                                                                ),
-                                                                                              ),
-                                                                                            )
-                                                                                                : null
-
-
-                                                                                          );
-                                                                                        } else if(name.toLowerCase().contains(searchController.text.toLowerCase())){
-                                                                                          return Container(
-
-                                                                                              child: driverDetails[index]['name'] == 'Mini'?
-                                                                                              Container(
-                                                                                                margin: EdgeInsets.symmetric(vertical: 8), // Add margin to create space between items
-                                                                                                decoration: BoxDecoration(
-                                                                                                  color: Colors.white12,
-                                                                                                  borderRadius: BorderRadius.circular(16),
-                                                                                                ),
-                                                                                                child: Padding(
-                                                                                                  padding: const EdgeInsets.all(16.0),
-                                                                                                  child: Column(
-                                                                                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                    mainAxisAlignment: MainAxisAlignment.start,
-                                                                                                    children: [
-                                                                                                      Row(
-                                                                                                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                                                                                        children: [
-                                                                                                          Text(
-                                                                                                           name,
-                                                                                                            style: GoogleFonts.notoSans(
-                                                                                                              color: Colors.blue,
-                                                                                                              fontSize: 24,
-                                                                                                              fontWeight: FontWeight.bold,
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                          Text(
-                                                                                                            'INR' + ' ' +   driverDetails[index]['total'].toStringAsFixed(2),
-                                                                                                            style: GoogleFonts.notoSans(color: Colors.white60),
-                                                                                                          ),
-                                                                                                        ],
-                                                                                                      ),
-                                                                                                      Text(
-                                                                                                        driverDetails[index]['name'],
-                                                                                                        style: TextStyle(
-                                                                                                          color: Colors.white60,
-                                                                                                          fontSize: 16,
-                                                                                                          fontWeight: FontWeight.bold,
-                                                                                                        ),
-                                                                                                      ),
-
-
-
-                                                                                                      Container(
-
-                                                                                                        child: driverDetails[index]['name'] == 'Mini'?  StarRating(
-                                                                                                          mainAxisAlignment: MainAxisAlignment
-                                                                                                              .start,
-                                                                                                          size: 24.0,
-                                                                                                          rating: driver['rating']
-                                                                                                              .toDouble(),
-
-                                                                                                          color: Colors
-                                                                                                              .white,
-                                                                                                          borderColor: Colors
-                                                                                                              .grey,
-                                                                                                          allowHalfRating: true,
-                                                                                                          starCount: 5,
-
-
-                                                                                                        ) : Container(
-
-                                                                                                        ),
-                                                                                                      ),
-
-                                                                                                      // StarRating(
-                                                                                                      //     mainAxisAlignment: MainAxisAlignment
-                                                                                                      //         .start,
-                                                                                                      //     size: 24.0,
-                                                                                                      //     rating: driver['rating']
-                                                                                                      //         .toDouble(),
-                                                                                                      //
-                                                                                                      //     color: Colors
-                                                                                                      //         .white,
-                                                                                                      //     borderColor: Colors
-                                                                                                      //         .grey,
-                                                                                                      //     allowHalfRating: true,
-                                                                                                      //     starCount: 5,
-                                                                                                      //
-                                                                                                      //
-                                                                                                      //   ),
-
-
-                                                                                                      SizedBox(height: 16),
-                                                                                                      Row(
-                                                                                                        children: [
-                                                                                                          SizedBox(
-                                                                                                            height: 56,
-                                                                                                            width: MediaQuery.of(context).size.width * 0.38,
-                                                                                                            child: ElevatedButton(
-                                                                                                              child: Text(
-                                                                                                                'Book Ride',
-                                                                                                                style: TextStyle(
-                                                                                                                  color: Colors.white,
-                                                                                                                ),
-                                                                                                              ),
-                                                                                                              onPressed: () async {
-                                                                                                                // Handle button press
-                                                                                                                setState(() {
-                                                                                                                  choosenVehicle = index;
-                                                                                                                  choosenDriver = driverIndex;
-                                                                                                                });
-                                                                                                                await createProRequest();
-                                                                                                                Navigator.pop(context); // Close the bottom sheet
-                                                                                                              },
-                                                                                                              style: ElevatedButton.styleFrom(
-                                                                                                                backgroundColor: Colors.black,
-                                                                                                                shape: RoundedRectangleBorder(
-                                                                                                                  borderRadius: BorderRadius.circular(24),
-                                                                                                                ),
-                                                                                                                textStyle: TextStyle(
-                                                                                                                  fontSize: 15,
-                                                                                                                  fontWeight: FontWeight.bold,
-                                                                                                                  color: Colors.white,
-                                                                                                                ),
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                          SizedBox(width: MediaQuery.of(context).size.width * 0.066),
-                                                                                                          SizedBox(
-                                                                                                            height: 56,
-                                                                                                            width: MediaQuery.of(context).size.width * 0.36,
-                                                                                                            child: OutlinedButton(
-                                                                                                              child: Text(
-                                                                                                                'View Details',
-                                                                                                                style: TextStyle(
-                                                                                                                  color: Colors.white,
-                                                                                                                ),
-                                                                                                              ),
-                                                                                                              onPressed: () {
-
-
-
-
-                                                                                                                showModalBottomSheet<void>(
-
-                                                                                                                    context: context,
-                                                                                                                    builder: (BuildContext context) {
-
-                                                                                                                      return Container(
-                                                                                                                        height: media.height*.5 ,
-                                                                                                                        width: MediaQuery.of(context).size.width,
-                                                                                                                        decoration: BoxDecoration(
-                                                                                                                          color: Colors.black.withOpacity(.9),
-
-                                                                                                                        ),
-                                                                                                                        child:
-
-                                                                                                                        Padding(
-                                                                                                                          padding: const EdgeInsets.only(left:16,top:40,right: 16),
-                                                                                                                          child: Column(
-                                                                                                                            crossAxisAlignment: CrossAxisAlignment.center,
-                                                                                                                            children: [
-                                                                                                                              Container(
-                                                                                                                                height: MediaQuery.of(context).size.height * 0.2,
-                                                                                                                                width: MediaQuery.of(context).size.width * 0.4,
-                                                                                                                                decoration: BoxDecoration(
-                                                                                                                                    shape: BoxShape.circle
-                                                                                                                                ),
-
-                                                                                                                                child: Image.network(
-                                                                                                                                  driver['profile_picture'],fit: BoxFit.cover, // URL of the image to be displayed
-                                                                                                                                ),
-                                                                                                                              ),
-                                                                                                                              SizedBox(height: MediaQuery.of(context).size.width*.025,),
-
-                                                                                                                              Text(driver['name'],
-                                                                                                                                style: GoogleFonts.notoSans(
-                                                                                                                                  color: Colors.white,
-                                                                                                                                  fontSize: 24,
-                                                                                                                                  fontWeight: FontWeight.bold,
-                                                                                                                                ),),
-                                                                                                                              SizedBox(height: MediaQuery.of(context).size.width*.015,),
-                                                                                                                              Center(
-                                                                                                                                child: Row(
-                                                                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                                                                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                                                  children: [
-                                                                                                                                    Text('Vehicle Model:',
-                                                                                                                                      style: GoogleFonts.notoSans(
-                                                                                                                                        color: Colors.white30,
-                                                                                                                                        fontSize:18,
-                                                                                                                                        fontWeight: FontWeight.w300,
-                                                                                                                                      ),),
-                                                                                                                                    // SizedBox(width: MediaQuery.of(context).size.width*.45,),
-                                                                                                                                    Text(driver['car_model_name'],
-                                                                                                                                      textAlign: TextAlign.left,
-                                                                                                                                      style: GoogleFonts.notoSans(
-                                                                                                                                        color: Colors.white,
-                                                                                                                                        fontSize: 18,
-                                                                                                                                        fontWeight: FontWeight.w700,
-                                                                                                                                      ),),
-                                                                                                                                  ],
-                                                                                                                                ),
-                                                                                                                              ),
-
-                                                                                                                              SizedBox(height: MediaQuery.of(context).size.width*.015,),
-
-                                                                                                                              Center(
-                                                                                                                                child: Row(
-                                                                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                                                                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                                                  children: [
-                                                                                                                                    Text('Vehicle No: ',
-                                                                                                                                      style: GoogleFonts.notoSans(
-                                                                                                                                        color: Colors.white30,
-                                                                                                                                        fontSize: 18,
-                                                                                                                                        fontWeight: FontWeight.w300,
-                                                                                                                                      ),),
-                                                                                                                                    //SizedBox(width: MediaQuery.of(context).size.width*.45,),
-                                                                                                                                    Text(driver['car_number'],
-                                                                                                                                      textAlign: TextAlign.right,
-                                                                                                                                      style: GoogleFonts.notoSans(
-                                                                                                                                        color: Colors.white,
-                                                                                                                                        fontSize: 18,
-                                                                                                                                        fontWeight: FontWeight.w700,
-                                                                                                                                      ),),
-                                                                                                                                  ],
-                                                                                                                                ),
-                                                                                                                              ),
-                                                                                                                              SizedBox(height: MediaQuery.of(context).size.width*.015,),
-
-                                                                                                                              Center(
-                                                                                                                                child: Row(
-                                                                                                                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-
-                                                                                                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                                                                  children: [
-                                                                                                                                    Text('Vehicle Color: ',
-                                                                                                                                      style: GoogleFonts.notoSans(
-                                                                                                                                        color: Colors.white30,
-                                                                                                                                        fontSize: 18,
-                                                                                                                                        fontWeight: FontWeight.w300,
-                                                                                                                                      ),),
-                                                                                                                                    // SizedBox(width: MediaQuery.of(context).size.width*.45,),
-                                                                                                                                    Text(driver['car_color'],
-                                                                                                                                      textAlign: TextAlign.right,
-                                                                                                                                      style: GoogleFonts.notoSans(
-                                                                                                                                        color: Colors.white,
-                                                                                                                                        fontSize: 18,
-                                                                                                                                        fontWeight: FontWeight.w700,
-                                                                                                                                      ),),
-                                                                                                                                  ],
-                                                                                                                                ),
-                                                                                                                              ),
-                                                                                                                              SizedBox(height: MediaQuery.of(context).size.width*.03,),
-                                                                                                                              //Driver Rating
-                                                                                                                              Center(
-                                                                                                                                child: Row(
-                                                                                                                                  mainAxisAlignment: MainAxisAlignment.center,
-                                                                                                                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                                                                                                                  children: [
-                                                                                                                                    StarRating(
-                                                                                                                                      mainAxisAlignment: MainAxisAlignment
-                                                                                                                                          .start,
-                                                                                                                                      size: 32.0,
-                                                                                                                                      rating: driver['rating']
-                                                                                                                                          .toDouble(),
-
-                                                                                                                                      color: Colors
-                                                                                                                                          .white,
-                                                                                                                                      borderColor: Colors
-                                                                                                                                          .grey,
-                                                                                                                                      allowHalfRating: true,
-                                                                                                                                      starCount: 5,
-
-
-                                                                                                                                    ),
-                                                                                                                                  ],
-                                                                                                                                ),
-                                                                                                                              )
-                                                                                                                            ],
-                                                                                                                          ),
-                                                                                                                        ),
-                                                                                                                      );
-                                                                                                                    }
-                                                                                                                );
-                                                                                                              },
-                                                                                                              style: OutlinedButton.styleFrom(
-                                                                                                                shape: RoundedRectangleBorder(
-                                                                                                                  borderRadius: BorderRadius.circular(24),
-                                                                                                                ),
-                                                                                                                textStyle: TextStyle(
-                                                                                                                  fontSize: 15,
-                                                                                                                  fontWeight: FontWeight.bold,
-                                                                                                                ),
-                                                                                                                side: BorderSide(
-                                                                                                                  color: Colors.white,
-                                                                                                                ),
-                                                                                                              ),
-                                                                                                            ),
-                                                                                                          ),
-                                                                                                        ],
-                                                                                                      ),
-                                                                                                    ],
-                                                                                                  ),
-                                                                                                ),
-                                                                                              )
-                                                                                                  : null
-
-
-                                                                                          );
-                                                                                        } else {
-                                                                                          return Container() ;
-                                                                                        }
-
-                                                                                      },
-                                                                                    ),
-                                                                                  ],
-                                                                                );
-                                                                              },
-                                                                            ),
-                                                                          ),
-
-
-
-                                                                        ],
-                                                                      ),
-                                                                    ),
-                                                                  );
-                                                                },
-                                                              );
-                                                            },
-                                                            child: Container(
-                                                              padding: EdgeInsets.all(media.width * 0.02),
-                                                              margin: EdgeInsets.only(top: 10, left: media.width * 0.05, right: media.width * 0.05),
-                                                              height: media.width * 0.157,
-                                                              decoration: BoxDecoration(
-                                                                borderRadius: BorderRadius.circular(12),
-                                                                boxShadow: [
-                                                                  BoxShadow(
-                                                                    color: (isDarkTheme == true) ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.21),
-                                                                    spreadRadius: 1.5,
-                                                                    blurRadius: 1.5,
-                                                                  )
-                                                                ],
-                                                                color: Colors.black38,
-                                                              ),
-                                                              child: Row(
-                                                                children: [
-                                                                  SizedBox(
-                                                                    width: media.width * 0.02,
-                                                                  ),
-                                                                  SizedBox(
-                                                                    height: 24,
-                                                                    width: 24,
-                                                                    child: Image.asset('assets/images/crown.png'),
-                                                                  ),
-                                                                  SizedBox(
-                                                                    width: media.width * 0.05,
-                                                                  ),
-                                                                  Text(
-                                                                    'Pro Booking',
-                                                                    style: GoogleFonts.notoSans(
-                                                                      fontSize: media.width * fourteen,
-                                                                      fontWeight: FontWeight.w600,
-                                                                      color: Colors.white,
-                                                                    ),
-                                                                  ),
-                                                                ],
-                                                              ),
-                                                            ),
-                                                          ),
-
-                                                        ],
-                                                      ))),
-                                            )
-                                                : (etaDetails.isNotEmpty &&
-                                                widget.type == 1)
-                                                ? Expanded(
-                                              child: SizedBox(
-                                                  width: media
-                                                      .width *
-                                                      1,
-                                                  child: Column(
+                                          duration: const Duration(
+                                              milliseconds: 200),
+                                          padding: EdgeInsets.only(
+                                              top: media.width * 0.02,
+                                              bottom: media.width * 0.02),
+                                          width: media.width * 1,
+                                          height:
+                                          (bottomChooseMethod == false &&
+                                              widget.type != 1)
+                                              ? media.width * 1.1
+                                              : (bottomChooseMethod ==
+                                              false &&
+                                              widget.type == 1)
+                                              ? media.height * 0.6
+                                              : media.height * 0.9,
+                                          decoration: BoxDecoration(
+                                              borderRadius:
+                                              const BorderRadius.only(
+                                                  topLeft:
+                                                  Radius.circular(48),
+                                                  topRight:
+                                                  Radius.circular(
+                                                      48)),
+                                              color: page),
+                                          child: Column(
+                                              children: [
+                                                SizedBox(
+                                                  height: media.width * 0.03,
+                                                ),
+                                                SizedBox(
+                                                  width: media.width * 1,
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                    MainAxisAlignment.start,
                                                     children: [
-                                                      SizedBox(
-                                                        height: media
-                                                            .width *
-                                                            0.025,
+                                                      Container(
+                                                        margin: EdgeInsets.only(
+                                                            left: media.width *
+                                                                0.05,
+                                                            right: media.width *
+                                                                0.05),
+                                                        width:
+                                                        media.width * 0.9,
+                                                        child: MyText(
+                                                          text: languages[
+                                                          choosenLanguage]
+                                                          [
+                                                          'text_availablerides'],
+                                                          size: media.width *
+                                                              fourteen,
+                                                          fontweight:
+                                                          FontWeight.bold,
+                                                        ),
                                                       ),
-                                                      SizedBox(
-                                                          width: media.width *
-                                                              0.9,
+                                                    ],
+                                                  ),
+                                                ),
+                                                SizedBox(
+                                                  height: media.width * 0.02,
+                                                ),
+                                                (etaDetails.isNotEmpty &&
+                                                    widget.type != 1)
+                                                    ? Expanded(
+                                                  child: SizedBox(
+                                                      width:
+                                                      media.width * 1,
+                                                      // height:
+                                                      //     media.width *
+                                                      //         0.4,
+                                                      child:
+                                                      SingleChildScrollView(
+                                                          physics:
+                                                          const BouncingScrollPhysics(),
                                                           child:
-                                                          SingleChildScrollView(
-                                                            scrollDirection:
-                                                            Axis.horizontal,
-                                                            child:
-                                                            Row(
-                                                              mainAxisAlignment:
-                                                              MainAxisAlignment.start,
-                                                              children: etaDetails
-                                                                  .asMap()
-                                                                  .map((i, value) {
-                                                                return MapEntry(
-                                                                    i,
-                                                                    Container(
-                                                                      margin: EdgeInsets.only(right: media.width * 0.05),
-                                                                      decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: (rentalChoosenOption == i) ? buttonColor : borderLines),
-                                                                      padding: EdgeInsets.all(media.width * 0.02),
-                                                                      child: InkWell(
-                                                                        onTap: () {
-                                                                          setState(() {
-                                                                            rentalOption = etaDetails[i]['typesWithPrice']['data'];
-                                                                            rentalChoosenOption = i;
-                                                                            choosenVehicle = null;
-                                                                            payingVia = 0;
-                                                                          });
-                                                                        },
-                                                                        child: Text(
-                                                                          etaDetails[i]['package_name'],
-                                                                          style: GoogleFonts.notoSans(fontSize: media.width * sixteen, fontWeight: FontWeight.w600, color: (rentalChoosenOption == i) ? Colors.black : Colors.black),
-                                                                        ),
-                                                                      ),
-                                                                    ));
-                                                              })
-                                                                  .values
-                                                                  .toList(),
-                                                            ),
-                                                          )),
-                                                      SizedBox(
-                                                          height: media.width *
-                                                              0.02),
-                                                      Expanded(
-                                                        child:
-                                                        SizedBox(
-                                                          width: media.width *
-                                                              0.9,
-                                                          child:
-                                                          SingleChildScrollView(
-                                                            // scrollDirection:
-                                                            //     Axis.horizontal,
-                                                            physics:
-                                                            const BouncingScrollPhysics(),
-                                                            child: Column(
-                                                                mainAxisAlignment: MainAxisAlignment.start,
-                                                                children: rentalOption
+                                                          Column(
+                                                            children: [
+                                                              Column(
+                                                                children: etaDetails
                                                                     .asMap()
                                                                     .map((i, value) {
                                                                   return MapEntry(
@@ -2838,7 +1662,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                                           stream: fdb.onValue,
                                                                           builder: (context, AsyncSnapshot event) {
                                                                             if (event.data != null) {
-                                                                              minutes[rentalOption[i]['type_id']] = '';
+                                                                              minutes[etaDetails[i]['type_id']] = '';
                                                                               List vehicleList = [];
                                                                               List vehicles = [];
                                                                               List<double> minsList = [];
@@ -2849,7 +1673,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                                                 // ignore: avoid_function_literals_in_foreach_calls
                                                                                 vehicleList.forEach(
                                                                                       (e) async {
-                                                                                    if (e['is_active'] == 1 && e['is_available'] == true && ((e['vehicle_types'] != null && e['vehicle_types'].contains(rentalOption[i]['type_id'])) || e['vehicle_type'] == rentalOption[i]['type_id'])) {
+                                                                                    if (e['is_active'] == 1 && e['is_available'] == true && ((e['vehicle_types'] != null && e['vehicle_types'].contains(etaDetails[i]['type_id'])) || e['vehicle_type'] == etaDetails[i]['type_id'])) {
                                                                                       DateTime dt = DateTime.fromMillisecondsSinceEpoch(e['updated_at']);
                                                                                       if (DateTime.now().difference(dt).inMinutes <= 2) {
                                                                                         vehicles.add(e);
@@ -2859,307 +1683,1629 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                                                           minsList.add(double.parse((dist / 1000).toString()));
                                                                                           var minDist = minsList.reduce(min);
                                                                                           if (minDist > 0 && minDist <= 1) {
-                                                                                            minutes[rentalOption[i]['type_id']] = '2 mins';
+                                                                                            minutes[etaDetails[i]['type_id']] = '2 mins';
                                                                                           } else if (minDist > 1 && minDist <= 3) {
-                                                                                            minutes[rentalOption[i]['type_id']] = '5 mins';
+                                                                                            minutes[etaDetails[i]['type_id']] = '5 mins';
                                                                                           } else if (minDist > 3 && minDist <= 5) {
-                                                                                            minutes[rentalOption[i]['type_id']] = '8 mins';
+                                                                                            minutes[etaDetails[i]['type_id']] = '8 mins';
                                                                                           } else if (minDist > 5 && minDist <= 7) {
-                                                                                            minutes[rentalOption[i]['type_id']] = '11 mins';
+                                                                                            minutes[etaDetails[i]['type_id']] = '11 mins';
                                                                                           } else if (minDist > 7 && minDist <= 10) {
-                                                                                            minutes[rentalOption[i]['type_id']] = '14 mins';
+                                                                                            minutes[etaDetails[i]['type_id']] = '14 mins';
                                                                                           } else if (minDist > 10) {
-                                                                                            minutes[rentalOption[i]['type_id']] = '15 mins';
+                                                                                            minutes[etaDetails[i]['type_id']] = '15 mins';
                                                                                           }
                                                                                         } else {
-                                                                                          minutes[rentalOption[i]['type_id']] = '';
+                                                                                          minutes[etaDetails[i]['type_id']] = '';
                                                                                         }
                                                                                       }
                                                                                     }
                                                                                   },
                                                                                 );
                                                                               } else {
-                                                                                minutes[rentalOption[i]['type_id']] = '';
+                                                                                minutes[etaDetails[i]['type_id']] = '';
                                                                               }
                                                                             } else {
-                                                                              minutes[rentalOption[i]['type_id']] = '';
+                                                                              minutes[etaDetails[i]['type_id']] = '';
                                                                             }
+
+                                                                            //MINI BUTTON
                                                                             return InkWell(
-                                                                                onTap: () {
+                                                                              onTap: () async {
+                                                                                if ((widget.type ==
+                                                                                    2) ||
+                                                                                    (((rentalOption.isEmpty && (etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['total'] && etaDetails[choosenVehicle]['has_discount'] == false) || (rentalOption.isEmpty && etaDetails[choosenVehicle]['has_discount'] == true && etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['discounted_totel'])) ||
+                                                                                        (rentalOption.isEmpty &&
+                                                                                            etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[payingVia] !=
+                                                                                                'wallet')) ||
+                                                                                        ((rentalOption.isNotEmpty && (etaDetails[0]['user_wallet_balance'] >= rentalOption[choosenVehicle]['fare_amount']) && rentalOption[choosenVehicle]['has_discount'] == false) ||
+                                                                                            (rentalOption.isNotEmpty &&
+                                                                                                rentalOption[choosenVehicle]['has_discount'] ==
+                                                                                                    true &&
+                                                                                                etaDetails[0]['user_wallet_balance'] >=
+                                                                                                    rentalOption[choosenVehicle][
+                                                                                                    'discounted_totel']) ||
+                                                                                            rentalOption.isNotEmpty &&
+                                                                                                rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[payingVia] !=
+                                                                                                    'wallet'))) {
                                                                                   setState(() {
-                                                                                    choosenVehicle = i;
+                                                                                    _isLoading =
+                                                                                    true;
                                                                                   });
-                                                                                },
-                                                                                child: Container(
-                                                                                  padding: EdgeInsets.all(media.width * 0.02),
-                                                                                  margin: EdgeInsets.only(top: 10, left: media.width * 0.05, right: media.width * 0.05),
-                                                                                  height: media.width * 0.152,
-                                                                                  decoration: BoxDecoration(
+                                                                                  dropStopList
+                                                                                      .clear();
+                                                                                  dynamic result;
+                                                                                  if (choosenVehicle !=
+                                                                                      null) {
+                                                                                    if (widget
+                                                                                        .type !=
+                                                                                        1) {
+                                                                                      if (etaDetails[
+                                                                                      choosenVehicle]
+                                                                                      [
+                                                                                      'has_discount'] ==
+                                                                                          false) {
+                                                                                        if (addressList
+                                                                                            .length >
+                                                                                            2) {
+                                                                                          for (var i =
+                                                                                          1;
+                                                                                          i < addressList.length;
+                                                                                          i++) {
+                                                                                            dropStopList.add(DropStops(
+                                                                                                order:
+                                                                                                i.toString(),
+                                                                                                latitude: addressList[i].latlng.latitude,
+                                                                                                longitude: addressList[i].latlng.longitude,
+                                                                                                address: addressList[i].address));
+                                                                                          }
+                                                                                        }
+                                                                                        result =
+                                                                                        await createRequest();
+                                                                                        if (result ==
+                                                                                            'logout') {
+                                                                                          navigateLogout();
+                                                                                        }
+                                                                                      } else {
+                                                                                        if (addressList
+                                                                                            .length >
+                                                                                            2) {
+                                                                                          for (var i =
+                                                                                          1;
+                                                                                          i < addressList.length;
+                                                                                          i++) {
+                                                                                            dropStopList.add(DropStops(
+                                                                                                order:
+                                                                                                i.toString(),
+                                                                                                latitude: addressList[i].latlng.latitude,
+                                                                                                longitude: addressList[i].latlng.longitude,
+                                                                                                address: addressList[i].address));
+                                                                                          }
+                                                                                        }
+                                                                                        result =
+                                                                                        await createRequestWithPromo();
+                                                                                        if (result ==
+                                                                                            'logout') {
+                                                                                          navigateLogout();
+                                                                                        }
+                                                                                      }
+                                                                                    } else {
+                                                                                      if (rentalOption[
+                                                                                      choosenVehicle]
+                                                                                      [
+                                                                                      'has_discount'] ==
+                                                                                          false) {
+                                                                                        result =
+                                                                                        await createRentalRequest();
+                                                                                        if (result ==
+                                                                                            'logout') {
+                                                                                          navigateLogout();
+                                                                                        }
+                                                                                      } else {
+                                                                                        result =
+                                                                                        await createRentalRequestWithPromo();
+                                                                                        if (result ==
+                                                                                            'logout') {
+                                                                                          navigateLogout();
+                                                                                        }
+                                                                                      }
+                                                                                    }
+                                                                                  }
+                                                                                  if (result ==
+                                                                                      'success') {
+                                                                                    timer();
+                                                                                  }
+                                                                                  setState(() {
+                                                                                    _isLoading =
+                                                                                    false;
+                                                                                  });
+                                                                                } else {
+                                                                                  setState(() {
+                                                                                    islowwalletbalance =
+                                                                                    true;
+                                                                                  });
+                                                                                }
+                                                                              },
+                                                                              child: Container(
+                                                                                padding: EdgeInsets.all(media.width * 0.02),
+                                                                                margin: EdgeInsets.only(top: 10, left: media.width * 0.05, right: media.width * 0.05),
+                                                                                height: media.width * 0.157,
+                                                                                decoration: BoxDecoration(
                                                                                     borderRadius: BorderRadius.circular(12),
-                                                                                    boxShadow: [
-                                                                                      BoxShadow(color: (isDarkTheme == true) ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.2), spreadRadius: 2, blurRadius: 2)
-                                                                                    ],
-                                                                                    color: (choosenVehicle != i)
-                                                                                        ? (isDarkTheme == true)
-                                                                                        ? Colors.black
-                                                                                        : Colors.white
-                                                                                        : const Color(0xffF3F3F3),
-                                                                                  ),
-                                                                                  child: Row(
-                                                                                    children: [
-                                                                                      (rentalOption[i]['icon'] != null)
-                                                                                          ? SizedBox(
-                                                                                          width: media.width * 0.1,
-                                                                                          child: Image.network(
-                                                                                            rentalOption[i]['icon'],
-                                                                                            fit: BoxFit.contain,
-                                                                                          ))
-                                                                                          : Container(),
-                                                                                      SizedBox(
-                                                                                        width: media.width * 0.05,
-                                                                                      ),
-                                                                                      Column(
-                                                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                                                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                                                                                        children: [
-                                                                                          Text(rentalOption[i]['name'],
+                                                                                    // boxShadow: [
+                                                                                    //   BoxShadow(color: (isDarkTheme == true) ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.2), spreadRadius: 2, blurRadius: 2)
+                                                                                    // ],
+                                                                                    color: Colors.white12
+
+                                                                                  // (choosenVehicle != i)
+                                                                                  //     ? (isDarkTheme == true)
+                                                                                  //         ? Colors.black
+                                                                                  //         : Colors.white
+                                                                                  //     : const Color.fromARGB(255, 174, 172, 172),
+                                                                                ),
+                                                                                child: Row(
+                                                                                  children: [
+
+                                                                                    SizedBox(
+                                                                                      width: 8,
+                                                                                    ),
+
+                                                                                    //Icon of cars
+
+                                                                                    Container(
+                                                                                      height:24,
+                                                                                      width: 24,
+                                                                                      child:  Image.asset('assets/images/1.png') ,
+                                                                                    ),
+
+                                                                                    // (etaDetails[i]['icon'] != null)
+                                                                                    //     ? SizedBox(
+                                                                                    //         width: media.width * 0.1,
+                                                                                    //         child: Image.network(
+                                                                                    //           etaDetails[i]['icon'],
+                                                                                    //           fit: BoxFit.contain,
+                                                                                    //         ))
+                                                                                    //     : Container(),
+                                                                                    SizedBox(
+                                                                                      width: media.width * 0.05,
+                                                                                    ),
+                                                                                    Column(
+                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                                                                      children: [
+                                                                                        Text(etaDetails[i]['name'],
+                                                                                            style: GoogleFonts.notoSans(
+                                                                                              fontSize: media.width * fourteen,
+                                                                                              fontWeight: FontWeight.w600,
+                                                                                              color: Colors.white,
+                                                                                              // (choosenVehicle != i)
+                                                                                              //     ? (isDarkTheme == true)
+                                                                                              //         ? hintColor
+                                                                                              //         : textColor
+                                                                                              //     : Colors.white
+                                                                                            )
+                                                                                        ),
+                                                                                        // Row(
+                                                                                        //   children: [
+                                                                                        //     Icon(
+                                                                                        //       Icons.timelapse,
+                                                                                        //       size: media.width * 0.04,
+                                                                                        //       color: const Color(0xff8A8A8A),
+                                                                                        //     ),
+                                                                                        //     SizedBox(
+                                                                                        //       width: media.width * 0.01,
+                                                                                        //     ),
+                                                                                        //     (minutes[etaDetails[i]['type_id']] != null && minutes[etaDetails[i]['type_id']] != '')
+                                                                                        //         ? Text(
+                                                                                        //             minutes[etaDetails[i]['type_id']].toString(),
+                                                                                        //             style: GoogleFonts.notoSans(fontSize: media.width * twelve, color: const Color(0xff8A8A8A)),
+                                                                                        //           )
+                                                                                        //         : Text(
+                                                                                        //             '- -',
+                                                                                        //             style: GoogleFonts.notoSans(
+                                                                                        //                 fontSize: media.width * twelve,
+                                                                                        //                 color: (choosenVehicle != i)
+                                                                                        //                     ? textColor.withOpacity(0.7)
+                                                                                        //                     : (isDarkTheme)
+                                                                                        //                         ? Colors.black
+                                                                                        //                         : hintColor.withOpacity(0.4)),
+                                                                                        //           ),
+                                                                                        //     SizedBox(
+                                                                                        //       width: media.width * 0.01,
+                                                                                        //     ),
+                                                                                        //     InkWell(
+                                                                                        //         onTap: () {
+                                                                                        //           setState(() {
+                                                                                        //             _showInfoInt = i;
+                                                                                        //             _showInfo = true;
+                                                                                        //           });
+                                                                                        //         },
+                                                                                        //         child: Icon(
+                                                                                        //           Icons.info_outline,
+                                                                                        //           size: media.width * 0.04,
+                                                                                        //           color: const Color(0xff8A8A8A),
+                                                                                        //         ))
+                                                                                        //   ],
+                                                                                        // ),
+                                                                                      ],
+                                                                                    ),
+
+                                                                                    // Price of rides
+
+                                                                                    (widget.type != 2)
+                                                                                        ? Expanded(
+                                                                                        child: (etaDetails[i]['has_discount'] != true)
+                                                                                            ? Row(
+                                                                                          mainAxisAlignment: MainAxisAlignment.end,
+                                                                                          children: [
+                                                                                            Text(
+                                                                                              etaDetails[i]['currency']
+                                                                                                  + ' '  +
+                                                                                                  // '${(isOutStation && daysDifferenceRoundedUp == 0) ?
+                                                                                                  etaDetails[i]['total'].toStringAsFixed(2)
+                                                                                              // : (daysDifferenceRoundedUp != 0) ? (double.parse(etaDetails[i]['total'].toString()) * daysDifferenceRoundedUp).toStringAsFixed(2) : etaDetails[i]['total'].toStringAsFixed(2)} ${etaDetails[i]['currency']}'
+
+                                                                                              // daysDifferenceRoundedUp    etaDetails[i]['total'].toStringAsFixed(2)
+                                                                                              ,
                                                                                               style: GoogleFonts.notoSans(
-                                                                                                  fontSize: media.width * fourteen,
-                                                                                                  fontWeight: FontWeight.w600,
-                                                                                                  color: (choosenVehicle != i)
-                                                                                                      ? (isDarkTheme == true)
-                                                                                                      ? hintColor
-                                                                                                      : textColor
-                                                                                                      : Colors.black)),
-                                                                                          Row(
+                                                                                                fontSize: media.width * fourteen,
+                                                                                                fontWeight: FontWeight.w600,
+                                                                                                color: Colors.white,
+                                                                                                // (choosenVehicle != i)
+                                                                                                //     ? (isDarkTheme == true)
+                                                                                                //         ? Colors.white
+                                                                                                //         : textColor
+                                                                                                //     : Colors.black
+                                                                                              ),
+                                                                                            ),
+                                                                                          ],
+                                                                                        )
+                                                                                            : Row(
+                                                                                          mainAxisAlignment: MainAxisAlignment.end,
+                                                                                          children: [
+                                                                                            Text(
+                                                                                              etaDetails[i]['currency'] + ' ',
+                                                                                              style: GoogleFonts.notoSans(fontSize: media.width * fourteen, color: (choosenVehicle != i) ? Colors.white : Colors.black, fontWeight: FontWeight.w600),
+                                                                                            ),
+                                                                                            Column(
+                                                                                              children: [
+                                                                                                Text(
+                                                                                                  etaDetails[i]['total'].toStringAsFixed(2),
+                                                                                                  style: GoogleFonts.notoSans(
+                                                                                                      fontSize: media.width * fourteen,
+                                                                                                      color: (choosenVehicle != i)
+                                                                                                          ? (isDarkTheme == true)
+                                                                                                          ? Colors.white
+                                                                                                          : textColor
+                                                                                                          : Colors.black,
+                                                                                                      fontWeight: FontWeight.w600,
+                                                                                                      decoration: TextDecoration.lineThrough),
+                                                                                                ),
+                                                                                                Text(
+                                                                                                  '${etaDetails[i]['discounted_totel'].toStringAsFixed(2)}',
+                                                                                                  style: GoogleFonts.notoSans(
+                                                                                                      fontSize: media.width * fourteen,
+                                                                                                      color: (choosenVehicle != i)
+                                                                                                          ? (isDarkTheme == true)
+                                                                                                          ? Colors.white
+                                                                                                          : textColor
+                                                                                                          : Colors.black,
+                                                                                                      fontWeight: FontWeight.w600),
+                                                                                                )
+                                                                                              ],
+                                                                                            ),
+                                                                                          ],
+                                                                                        ))
+                                                                                        : Container()
+                                                                                  ],
+                                                                                ),
+                                                                              ),
+                                                                            );
+                                                                          }));
+
+                                                                }
+                                                                )
+                                                                    .values
+                                                                    .toList(),
+                                                              ),
+
+                                                              //pro rider
+                                                              InkWell(
+                                                                onTap: () async {
+                                                                  showModalBottomSheet<void>(
+                                                                    isScrollControlled: true,
+                                                                    context: context,
+                                                                    builder: (BuildContext context) {
+                                                                      return Padding(
+                                                                        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+                                                                        child: Container(
+                                                                          height: media.width * 3,
+                                                                          width: media.width * 1,
+                                                                          decoration: BoxDecoration(
+                                                                            borderRadius: const BorderRadius.only(
+                                                                              topLeft: Radius.circular(24),
+                                                                              topRight: Radius.circular(24),
+                                                                            ),
+                                                                            color: Colors.black,
+                                                                          ),
+                                                                          padding: EdgeInsets.all(media.width * 0.05),
+                                                                          child: Column(
+                                                                            children: [
+
+                                                                              SizedBox(
+                                                                                height: 32,
+                                                                              ),
+                                                                              Text(
+                                                                                'Select Your Captain',
+                                                                                style: GoogleFonts.notoSans(
+                                                                                  color: Colors.white,
+                                                                                  fontSize: 24,
+                                                                                  fontWeight: FontWeight.bold,
+                                                                                ),
+                                                                              ),
+                                                                              Padding(
+                                                                                padding: const EdgeInsets.only(top: 8),
+                                                                                child: Row(
+                                                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                                                  children: [
+                                                                                    SizedBox(
+                                                                                      width: MediaQuery.of(context).size.width * 0.9,
+                                                                                      height: 56,
+                                                                                      //Main PRO RIDER TEXT FIELD
+                                                                                      child: TextField(
+                                                                                        cursorColor: Colors.white,
+                                                                                        controller: searchController,
+                                                                                        style: TextStyle(color:Colors.white),
+                                                                                        decoration: InputDecoration(
+                                                                                          prefixIcon: Icon(Icons.search),
+                                                                                          fillColor: Colors.black.withOpacity(.8),
+                                                                                          focusColor: Colors.white,
+                                                                                          focusedBorder: OutlineInputBorder(
+                                                                                            borderSide: BorderSide(color: Colors.white), // Set the color for focused border
+                                                                                            borderRadius: BorderRadius.circular(24),
+                                                                                          ),
+                                                                                          border: OutlineInputBorder(
+                                                                                            borderRadius: BorderRadius.circular(24),
+                                                                                          ),
+                                                                                          hintText: 'Search By Name, Car Number, driver id..',
+                                                                                          hintStyle: GoogleFonts.notoSans(color: Colors.white24),
+                                                                                          filled: true,
+                                                                                        ),
+                                                                                        onChanged: (String? value){
+                                                                                          setState(() {
+                                                                                            search = value.toString();
+                                                                                          });
+                                                                                        },
+                                                                                      ),
+                                                                                    ),
+                                                                                    // SizedBox(width: MediaQuery.of(context).size.width * 0.01),
+                                                                                    // Container(
+                                                                                    //   height: 40,
+                                                                                    //   width: 40,
+                                                                                    //   decoration: BoxDecoration(
+                                                                                    //     shape: BoxShape.circle,
+                                                                                    //     color: Colors.white.withOpacity(.1),
+                                                                                    //   ),
+                                                                                    //   child: Icon(
+                                                                                    //     Icons.downloading_sharp,
+                                                                                    //     color: Colors.white60,
+                                                                                    //   ),
+                                                                                    // ),
+                                                                                    // SizedBox(width: MediaQuery.of(context).size.width * 0.01),
+                                                                                    // Container(
+                                                                                    //   height: 40,
+                                                                                    //   width: 40,
+                                                                                    //   decoration: BoxDecoration(
+                                                                                    //     shape: BoxShape.circle,
+                                                                                    //     color: Colors.white.withOpacity(.1),
+                                                                                    //   ),
+                                                                                    //   child: Icon(Icons.receipt_long_rounded, color: Colors.white60),
+                                                                                    // ),
+                                                                                  ],
+                                                                                ),
+                                                                              ),
+                                                                              SizedBox(
+                                                                                height: 22,
+                                                                              ),
+
+                                                                              Expanded(
+                                                                                child: ListView.separated(
+                                                                                  itemCount: driverDetails.length,
+                                                                                  separatorBuilder: (BuildContext context, int index) {
+                                                                                    return SizedBox(height: 16); // Adjust the height according to your preference
+                                                                                  },
+                                                                                  itemBuilder: (BuildContext context, int index) {
+                                                                                    return Column(
+                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                      mainAxisAlignment: MainAxisAlignment.start,
+                                                                                      children: [
+                                                                                        ListView.builder(
+                                                                                          shrinkWrap: true,
+                                                                                          physics: NeverScrollableScrollPhysics(),
+                                                                                          itemCount: driverDetails[index]['drivers'].length,
+                                                                                          itemBuilder: (BuildContext context, int driverIndex) {
+
+                                                                                            final driver = driverDetails[index]['drivers'][driverIndex];
+                                                                                            late String name =  driver['name'];
+                                                                                            if(searchController.text.isEmpty){
+
+
+                                                                                              return Container(
+
+                                                                                                  child: driverDetails[index]['name'] == 'Mini'?
+                                                                                                  Container(
+                                                                                                    margin: EdgeInsets.symmetric(vertical: 8), // Add margin to create space between items
+                                                                                                    decoration: BoxDecoration(
+                                                                                                      color: Colors.white12,
+                                                                                                      borderRadius: BorderRadius.circular(16),
+                                                                                                    ),
+                                                                                                    child: Padding(
+                                                                                                      padding: const EdgeInsets.all(16.0),
+                                                                                                      child: Column(
+                                                                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                        mainAxisAlignment: MainAxisAlignment.start,
+                                                                                                        children: [
+                                                                                                          Row(
+                                                                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                                            children: [
+                                                                                                              Text(
+                                                                                                                driver['name'],
+                                                                                                                style: GoogleFonts.notoSans(
+                                                                                                                  color: Colors.white60,
+                                                                                                                  fontSize: 24,
+                                                                                                                  fontWeight: FontWeight.bold,
+                                                                                                                ),
+                                                                                                              ),
+                                                                                                              Text(
+                                                                                                                'INR' + ' ' +   driverDetails[index]['total'].toStringAsFixed(2),
+                                                                                                                style: GoogleFonts.notoSans(color: Colors.white60),
+                                                                                                              ),
+                                                                                                            ],
+                                                                                                          ),
+                                                                                                          Text(
+                                                                                                            driverDetails[index]['name'],
+                                                                                                            style: TextStyle(
+                                                                                                              color: Colors.white60,
+                                                                                                              fontSize: 16,
+                                                                                                              fontWeight: FontWeight.bold,
+                                                                                                            ),
+                                                                                                          ),
+
+
+
+                                                                                                          Container(
+
+                                                                                                            child: driverDetails[index]['name'] == 'Mini'?  StarRating(
+                                                                                                              mainAxisAlignment: MainAxisAlignment
+                                                                                                                  .start,
+                                                                                                              size: 24.0,
+                                                                                                              rating: driver['rating']
+                                                                                                                  .toDouble(),
+
+                                                                                                              color: Colors
+                                                                                                                  .white,
+                                                                                                              borderColor: Colors
+                                                                                                                  .grey,
+                                                                                                              allowHalfRating: true,
+                                                                                                              starCount: 5,
+
+
+                                                                                                            ) : Container(
+
+                                                                                                            ),
+                                                                                                          ),
+
+                                                                                                          // StarRating(
+                                                                                                          //     mainAxisAlignment: MainAxisAlignment
+                                                                                                          //         .start,
+                                                                                                          //     size: 24.0,
+                                                                                                          //     rating: driver['rating']
+                                                                                                          //         .toDouble(),
+                                                                                                          //
+                                                                                                          //     color: Colors
+                                                                                                          //         .white,
+                                                                                                          //     borderColor: Colors
+                                                                                                          //         .grey,
+                                                                                                          //     allowHalfRating: true,
+                                                                                                          //     starCount: 5,
+                                                                                                          //
+                                                                                                          //
+                                                                                                          //   ),
+
+
+                                                                                                          SizedBox(height: 16),
+                                                                                                          Row(
+                                                                                                            children: [
+                                                                                                              SizedBox(
+                                                                                                                height: 56,
+                                                                                                                width: MediaQuery.of(context).size.width * 0.38,
+                                                                                                                child: ElevatedButton(
+                                                                                                                  child: Text(
+                                                                                                                    'Book Ride',
+                                                                                                                    style: TextStyle(
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                  onPressed: () async {
+                                                                                                                    setState(() {
+                                                                                                                      choosenVehicle = index;
+                                                                                                                      choosenDriver = driverIndex;
+                                                                                                                    });
+                                                                                                                    // Handle button press
+                                                                                                                    await createProRequest();
+                                                                                                                    Navigator.pop(context); // Close the bottom sheet
+                                                                                                                  },
+                                                                                                                  style: ElevatedButton.styleFrom(
+                                                                                                                    backgroundColor: Colors.black,
+                                                                                                                    shape: RoundedRectangleBorder(
+                                                                                                                      borderRadius: BorderRadius.circular(24),
+                                                                                                                    ),
+                                                                                                                    textStyle: TextStyle(
+                                                                                                                      fontSize: 15,
+                                                                                                                      fontWeight: FontWeight.bold,
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                ),
+                                                                                                              ),
+                                                                                                              SizedBox(width: MediaQuery.of(context).size.width * 0.066),
+                                                                                                              SizedBox(
+                                                                                                                height: 56,
+                                                                                                                width: MediaQuery.of(context).size.width * 0.36,
+                                                                                                                child: OutlinedButton(
+                                                                                                                  child: Text(
+                                                                                                                    'View Details',
+                                                                                                                    style: TextStyle(
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                  onPressed: () {
+
+
+
+
+                                                                                                                    showModalBottomSheet<void>(
+
+                                                                                                                        context: context,
+                                                                                                                        builder: (BuildContext context) {
+
+                                                                                                                          return Container(
+                                                                                                                            height: media.height*.5 ,
+                                                                                                                            width: MediaQuery.of(context).size.width,
+                                                                                                                            decoration: BoxDecoration(
+                                                                                                                              color: Colors.black.withOpacity(.9),
+
+                                                                                                                            ),
+                                                                                                                            child:
+
+                                                                                                                            Padding(
+                                                                                                                              padding: const EdgeInsets.only(left:16,top:40,right: 16),
+                                                                                                                              child: Column(
+                                                                                                                                crossAxisAlignment: CrossAxisAlignment.center,
+                                                                                                                                children: [
+                                                                                                                                  Container(
+                                                                                                                                    height: MediaQuery.of(context).size.height * 0.2,
+                                                                                                                                    width: MediaQuery.of(context).size.width * 0.4,
+                                                                                                                                    decoration: BoxDecoration(
+                                                                                                                                        shape: BoxShape.circle
+                                                                                                                                    ),
+
+                                                                                                                                    child: Image.network(
+                                                                                                                                      driver['profile_picture'],fit: BoxFit.cover, // URL of the image to be displayed
+                                                                                                                                    ),
+                                                                                                                                  ),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.025,),
+
+                                                                                                                                  Text(driver['name'],
+                                                                                                                                    style: GoogleFonts.notoSans(
+                                                                                                                                      color: Colors.white,
+                                                                                                                                      fontSize: 24,
+                                                                                                                                      fontWeight: FontWeight.bold,
+                                                                                                                                    ),),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.015,),
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                                                      children: [
+                                                                                                                                        Text('Vehicle Model:',
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white30,
+                                                                                                                                            fontSize:18,
+                                                                                                                                            fontWeight: FontWeight.w300,
+                                                                                                                                          ),),
+                                                                                                                                        // SizedBox(width: MediaQuery.of(context).size.width*.45,),
+                                                                                                                                        Text(driver['car_model_name'],
+                                                                                                                                          textAlign: TextAlign.left,
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w700,
+                                                                                                                                          ),),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  ),
+
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.015,),
+
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                                                      children: [
+                                                                                                                                        Text('Vehicle No: ',
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white30,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w300,
+                                                                                                                                          ),),
+                                                                                                                                        //SizedBox(width: MediaQuery.of(context).size.width*.45,),
+                                                                                                                                        Text(driver['car_number'],
+                                                                                                                                          textAlign: TextAlign.right,
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w700,
+                                                                                                                                          ),),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  ),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.015,),
+
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                                                      children: [
+                                                                                                                                        Text('Vehicle Color: ',
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white30,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w300,
+                                                                                                                                          ),),
+                                                                                                                                        // SizedBox(width: MediaQuery.of(context).size.width*.45,),
+                                                                                                                                        Text(driver['car_color'],
+                                                                                                                                          textAlign: TextAlign.right,
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w700,
+                                                                                                                                          ),),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  ),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.03,),
+                                                                                                                                  //Driver Rating
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                                                                                                                      children: [
+                                                                                                                                        StarRating(
+                                                                                                                                          mainAxisAlignment: MainAxisAlignment
+                                                                                                                                              .start,
+                                                                                                                                          size: 32.0,
+                                                                                                                                          rating: driver['rating']
+                                                                                                                                              .toDouble(),
+
+                                                                                                                                          color: Colors
+                                                                                                                                              .white,
+                                                                                                                                          borderColor: Colors
+                                                                                                                                              .grey,
+                                                                                                                                          allowHalfRating: true,
+                                                                                                                                          starCount: 5,
+
+
+                                                                                                                                        ),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  )
+                                                                                                                                ],
+                                                                                                                              ),
+                                                                                                                            ),
+                                                                                                                          );
+                                                                                                                        }
+                                                                                                                    );
+                                                                                                                  },
+                                                                                                                  style: OutlinedButton.styleFrom(
+                                                                                                                    shape: RoundedRectangleBorder(
+                                                                                                                      borderRadius: BorderRadius.circular(24),
+                                                                                                                    ),
+                                                                                                                    textStyle: TextStyle(
+                                                                                                                      fontSize: 15,
+                                                                                                                      fontWeight: FontWeight.bold,
+                                                                                                                    ),
+                                                                                                                    side: BorderSide(
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                ),
+                                                                                                              ),
+                                                                                                            ],
+                                                                                                          ),
+                                                                                                        ],
+                                                                                                      ),
+                                                                                                    ),
+                                                                                                  )
+                                                                                                      : null
+
+
+                                                                                              );
+                                                                                            } else if(name.toLowerCase().contains(searchController.text.toLowerCase())){
+                                                                                              return Container(
+
+                                                                                                  child: driverDetails[index]['name'] == 'Mini'?
+                                                                                                  Container(
+                                                                                                    margin: EdgeInsets.symmetric(vertical: 8), // Add margin to create space between items
+                                                                                                    decoration: BoxDecoration(
+                                                                                                      color: Colors.white12,
+                                                                                                      borderRadius: BorderRadius.circular(16),
+                                                                                                    ),
+                                                                                                    child: Padding(
+                                                                                                      padding: const EdgeInsets.all(16.0),
+                                                                                                      child: Column(
+                                                                                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                        mainAxisAlignment: MainAxisAlignment.start,
+                                                                                                        children: [
+                                                                                                          Row(
+                                                                                                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                                                            children: [
+                                                                                                              Text(
+                                                                                                                name,
+                                                                                                                style: GoogleFonts.notoSans(
+                                                                                                                  color: Colors.blue,
+                                                                                                                  fontSize: 24,
+                                                                                                                  fontWeight: FontWeight.bold,
+                                                                                                                ),
+                                                                                                              ),
+                                                                                                              Text(
+                                                                                                                'INR' + ' ' +   driverDetails[index]['total'].toStringAsFixed(2),
+                                                                                                                style: GoogleFonts.notoSans(color: Colors.white60),
+                                                                                                              ),
+                                                                                                            ],
+                                                                                                          ),
+                                                                                                          Text(
+                                                                                                            driverDetails[index]['name'],
+                                                                                                            style: TextStyle(
+                                                                                                              color: Colors.white60,
+                                                                                                              fontSize: 16,
+                                                                                                              fontWeight: FontWeight.bold,
+                                                                                                            ),
+                                                                                                          ),
+
+
+
+                                                                                                          Container(
+
+                                                                                                            child: driverDetails[index]['name'] == 'Mini'?  StarRating(
+                                                                                                              mainAxisAlignment: MainAxisAlignment
+                                                                                                                  .start,
+                                                                                                              size: 24.0,
+                                                                                                              rating: driver['rating']
+                                                                                                                  .toDouble(),
+
+                                                                                                              color: Colors
+                                                                                                                  .white,
+                                                                                                              borderColor: Colors
+                                                                                                                  .grey,
+                                                                                                              allowHalfRating: true,
+                                                                                                              starCount: 5,
+
+
+                                                                                                            ) : Container(
+
+                                                                                                            ),
+                                                                                                          ),
+
+                                                                                                          // StarRating(
+                                                                                                          //     mainAxisAlignment: MainAxisAlignment
+                                                                                                          //         .start,
+                                                                                                          //     size: 24.0,
+                                                                                                          //     rating: driver['rating']
+                                                                                                          //         .toDouble(),
+                                                                                                          //
+                                                                                                          //     color: Colors
+                                                                                                          //         .white,
+                                                                                                          //     borderColor: Colors
+                                                                                                          //         .grey,
+                                                                                                          //     allowHalfRating: true,
+                                                                                                          //     starCount: 5,
+                                                                                                          //
+                                                                                                          //
+                                                                                                          //   ),
+
+
+                                                                                                          SizedBox(height: 16),
+                                                                                                          Row(
+                                                                                                            children: [
+                                                                                                              SizedBox(
+                                                                                                                height: 56,
+                                                                                                                width: MediaQuery.of(context).size.width * 0.38,
+                                                                                                                child: ElevatedButton(
+                                                                                                                  child: Text(
+                                                                                                                    'Book Ride',
+                                                                                                                    style: TextStyle(
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                  onPressed: () async {
+                                                                                                                    // Handle button press
+                                                                                                                    setState(() {
+                                                                                                                      choosenVehicle = index;
+                                                                                                                      choosenDriver = driverIndex;
+                                                                                                                    });
+                                                                                                                    await createProRequest();
+                                                                                                                    Navigator.pop(context); // Close the bottom sheet
+                                                                                                                  },
+                                                                                                                  style: ElevatedButton.styleFrom(
+                                                                                                                    backgroundColor: Colors.black,
+                                                                                                                    shape: RoundedRectangleBorder(
+                                                                                                                      borderRadius: BorderRadius.circular(24),
+                                                                                                                    ),
+                                                                                                                    textStyle: TextStyle(
+                                                                                                                      fontSize: 15,
+                                                                                                                      fontWeight: FontWeight.bold,
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                ),
+                                                                                                              ),
+                                                                                                              SizedBox(width: MediaQuery.of(context).size.width * 0.066),
+                                                                                                              SizedBox(
+                                                                                                                height: 56,
+                                                                                                                width: MediaQuery.of(context).size.width * 0.36,
+                                                                                                                child: OutlinedButton(
+                                                                                                                  child: Text(
+                                                                                                                    'View Details',
+                                                                                                                    style: TextStyle(
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                  onPressed: () {
+
+
+
+
+                                                                                                                    showModalBottomSheet<void>(
+
+                                                                                                                        context: context,
+                                                                                                                        builder: (BuildContext context) {
+
+                                                                                                                          return Container(
+                                                                                                                            height: media.height*.5 ,
+                                                                                                                            width: MediaQuery.of(context).size.width,
+                                                                                                                            decoration: BoxDecoration(
+                                                                                                                              color: Colors.black.withOpacity(.9),
+
+                                                                                                                            ),
+                                                                                                                            child:
+
+                                                                                                                            Padding(
+                                                                                                                              padding: const EdgeInsets.only(left:16,top:40,right: 16),
+                                                                                                                              child: Column(
+                                                                                                                                crossAxisAlignment: CrossAxisAlignment.center,
+                                                                                                                                children: [
+                                                                                                                                  Container(
+                                                                                                                                    height: MediaQuery.of(context).size.height * 0.2,
+                                                                                                                                    width: MediaQuery.of(context).size.width * 0.4,
+                                                                                                                                    decoration: BoxDecoration(
+                                                                                                                                        shape: BoxShape.circle
+                                                                                                                                    ),
+
+                                                                                                                                    child: Image.network(
+                                                                                                                                      driver['profile_picture'],fit: BoxFit.cover, // URL of the image to be displayed
+                                                                                                                                    ),
+                                                                                                                                  ),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.025,),
+
+                                                                                                                                  Text(driver['name'],
+                                                                                                                                    style: GoogleFonts.notoSans(
+                                                                                                                                      color: Colors.white,
+                                                                                                                                      fontSize: 24,
+                                                                                                                                      fontWeight: FontWeight.bold,
+                                                                                                                                    ),),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.015,),
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                                                      children: [
+                                                                                                                                        Text('Vehicle Model:',
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white30,
+                                                                                                                                            fontSize:18,
+                                                                                                                                            fontWeight: FontWeight.w300,
+                                                                                                                                          ),),
+                                                                                                                                        // SizedBox(width: MediaQuery.of(context).size.width*.45,),
+                                                                                                                                        Text(driver['car_model_name'],
+                                                                                                                                          textAlign: TextAlign.left,
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w700,
+                                                                                                                                          ),),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  ),
+
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.015,),
+
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                                                      children: [
+                                                                                                                                        Text('Vehicle No: ',
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white30,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w300,
+                                                                                                                                          ),),
+                                                                                                                                        //SizedBox(width: MediaQuery.of(context).size.width*.45,),
+                                                                                                                                        Text(driver['car_number'],
+                                                                                                                                          textAlign: TextAlign.right,
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w700,
+                                                                                                                                          ),),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  ),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.015,),
+
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                                                                      children: [
+                                                                                                                                        Text('Vehicle Color: ',
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white30,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w300,
+                                                                                                                                          ),),
+                                                                                                                                        // SizedBox(width: MediaQuery.of(context).size.width*.45,),
+                                                                                                                                        Text(driver['car_color'],
+                                                                                                                                          textAlign: TextAlign.right,
+                                                                                                                                          style: GoogleFonts.notoSans(
+                                                                                                                                            color: Colors.white,
+                                                                                                                                            fontSize: 18,
+                                                                                                                                            fontWeight: FontWeight.w700,
+                                                                                                                                          ),),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  ),
+                                                                                                                                  SizedBox(height: MediaQuery.of(context).size.width*.03,),
+                                                                                                                                  //Driver Rating
+                                                                                                                                  Center(
+                                                                                                                                    child: Row(
+                                                                                                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                                                                                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                                                                                                                      children: [
+                                                                                                                                        StarRating(
+                                                                                                                                          mainAxisAlignment: MainAxisAlignment
+                                                                                                                                              .start,
+                                                                                                                                          size: 32.0,
+                                                                                                                                          rating: driver['rating']
+                                                                                                                                              .toDouble(),
+
+                                                                                                                                          color: Colors
+                                                                                                                                              .white,
+                                                                                                                                          borderColor: Colors
+                                                                                                                                              .grey,
+                                                                                                                                          allowHalfRating: true,
+                                                                                                                                          starCount: 5,
+
+
+                                                                                                                                        ),
+                                                                                                                                      ],
+                                                                                                                                    ),
+                                                                                                                                  )
+                                                                                                                                ],
+                                                                                                                              ),
+                                                                                                                            ),
+                                                                                                                          );
+                                                                                                                        }
+                                                                                                                    );
+                                                                                                                  },
+                                                                                                                  style: OutlinedButton.styleFrom(
+                                                                                                                    shape: RoundedRectangleBorder(
+                                                                                                                      borderRadius: BorderRadius.circular(24),
+                                                                                                                    ),
+                                                                                                                    textStyle: TextStyle(
+                                                                                                                      fontSize: 15,
+                                                                                                                      fontWeight: FontWeight.bold,
+                                                                                                                    ),
+                                                                                                                    side: BorderSide(
+                                                                                                                      color: Colors.white,
+                                                                                                                    ),
+                                                                                                                  ),
+                                                                                                                ),
+                                                                                                              ),
+                                                                                                            ],
+                                                                                                          ),
+                                                                                                        ],
+                                                                                                      ),
+                                                                                                    ),
+                                                                                                  )
+                                                                                                      : null
+
+
+                                                                                              );
+                                                                                            } else {
+                                                                                              return Container() ;
+                                                                                            }
+
+                                                                                          },
+                                                                                        ),
+                                                                                      ],
+                                                                                    );
+                                                                                  },
+                                                                                ),
+                                                                              ),
+
+
+
+                                                                            ],
+                                                                          ),
+                                                                        ),
+                                                                      );
+                                                                    },
+                                                                  );
+                                                                },
+                                                                child: Container(
+                                                                  padding: EdgeInsets.all(media.width * 0.02),
+                                                                  margin: EdgeInsets.only(top: 10, left: media.width * 0.05, right: media.width * 0.05),
+                                                                  height: media.width * 0.157,
+                                                                  decoration: BoxDecoration(
+                                                                    borderRadius: BorderRadius.circular(12),
+                                                                    boxShadow: [
+                                                                      BoxShadow(
+                                                                        color: (isDarkTheme == true) ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.21),
+                                                                        spreadRadius: 1.5,
+                                                                        blurRadius: 1.5,
+                                                                      )
+                                                                    ],
+                                                                    color: Colors.black38,
+                                                                  ),
+                                                                  child: Row(
+                                                                    children: [
+                                                                      SizedBox(
+                                                                        width: media.width * 0.02,
+                                                                      ),
+                                                                      SizedBox(
+                                                                        height: 24,
+                                                                        width: 24,
+                                                                        child: Image.asset('assets/images/crown.png'),
+                                                                      ),
+                                                                      SizedBox(
+                                                                        width: media.width * 0.05,
+                                                                      ),
+                                                                      Text(
+                                                                        'Pro Booking',
+                                                                        style: GoogleFonts.notoSans(
+                                                                          fontSize: media.width * fourteen,
+                                                                          fontWeight: FontWeight.w600,
+                                                                          color: Colors.white,
+                                                                        ),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                ),
+                                                              ),
+
+                                                            ],
+                                                          ))),
+                                                )
+                                                    : (etaDetails.isNotEmpty &&
+                                                    widget.type == 1)
+                                                    ? Expanded(
+                                                  child: SizedBox(
+                                                      width: media
+                                                          .width *
+                                                          1,
+                                                      child: Column(
+                                                        children: [
+                                                          SizedBox(
+                                                            height: media
+                                                                .width *
+                                                                0.025,
+                                                          ),
+                                                          SizedBox(
+                                                              width: media.width *
+                                                                  0.9,
+                                                              child:
+                                                              SingleChildScrollView(
+                                                                scrollDirection:
+                                                                Axis.horizontal,
+                                                                child:
+                                                                Row(
+                                                                  mainAxisAlignment:
+                                                                  MainAxisAlignment.start,
+                                                                  children: etaDetails
+                                                                      .asMap()
+                                                                      .map((i, value) {
+                                                                    return MapEntry(
+                                                                        i,
+                                                                        Container(
+                                                                          margin: EdgeInsets.only(right: media.width * 0.05),
+                                                                          decoration: BoxDecoration(borderRadius: BorderRadius.circular(8), color: (rentalChoosenOption == i) ? buttonColor : borderLines),
+                                                                          padding: EdgeInsets.all(media.width * 0.02),
+                                                                          child: InkWell(
+                                                                            onTap: () {
+                                                                              setState(() {
+                                                                                rentalOption = etaDetails[i]['typesWithPrice']['data'];
+                                                                                rentalChoosenOption = i;
+                                                                                choosenVehicle = null;
+                                                                                payingVia = 0;
+                                                                              });
+                                                                            },
+                                                                            child: Text(
+                                                                              etaDetails[i]['package_name'],
+                                                                              style: GoogleFonts.notoSans(fontSize: media.width * sixteen, fontWeight: FontWeight.w600, color: (rentalChoosenOption == i) ? Colors.black : Colors.black),
+                                                                            ),
+                                                                          ),
+                                                                        ));
+                                                                  })
+                                                                      .values
+                                                                      .toList(),
+                                                                ),
+                                                              )),
+                                                          SizedBox(
+                                                              height: media.width *
+                                                                  0.02),
+                                                          Expanded(
+                                                            child:
+                                                            SizedBox(
+                                                              width: media.width *
+                                                                  0.9,
+                                                              child:
+                                                              SingleChildScrollView(
+                                                                // scrollDirection:
+                                                                //     Axis.horizontal,
+                                                                physics:
+                                                                const BouncingScrollPhysics(),
+                                                                child: Column(
+                                                                    mainAxisAlignment: MainAxisAlignment.start,
+                                                                    children: rentalOption
+                                                                        .asMap()
+                                                                        .map((i, value) {
+                                                                      return MapEntry(
+                                                                          i,
+                                                                          StreamBuilder<DatabaseEvent>(
+                                                                              stream: fdb.onValue,
+                                                                              builder: (context, AsyncSnapshot event) {
+                                                                                if (event.data != null) {
+                                                                                  minutes[rentalOption[i]['type_id']] = '';
+                                                                                  List vehicleList = [];
+                                                                                  List vehicles = [];
+                                                                                  List<double> minsList = [];
+                                                                                  event.data!.snapshot.children.forEach((e) {
+                                                                                    vehicleList.add(e.value);
+                                                                                  });
+                                                                                  if (vehicleList.isNotEmpty) {
+                                                                                    // ignore: avoid_function_literals_in_foreach_calls
+                                                                                    vehicleList.forEach(
+                                                                                          (e) async {
+                                                                                        if (e['is_active'] == 1 && e['is_available'] == true && ((e['vehicle_types'] != null && e['vehicle_types'].contains(rentalOption[i]['type_id'])) || e['vehicle_type'] == rentalOption[i]['type_id'])) {
+                                                                                          DateTime dt = DateTime.fromMillisecondsSinceEpoch(e['updated_at']);
+                                                                                          if (DateTime.now().difference(dt).inMinutes <= 2) {
+                                                                                            vehicles.add(e);
+                                                                                            if (vehicles.isNotEmpty) {
+                                                                                              var dist = calculateDistance(addressList.firstWhere((e) => e.type == 'pickup').latlng.latitude, addressList.firstWhere((e) => e.type == 'pickup').latlng.longitude, e['l'][0], e['l'][1]);
+
+                                                                                              minsList.add(double.parse((dist / 1000).toString()));
+                                                                                              var minDist = minsList.reduce(min);
+                                                                                              if (minDist > 0 && minDist <= 1) {
+                                                                                                minutes[rentalOption[i]['type_id']] = '2 mins';
+                                                                                              } else if (minDist > 1 && minDist <= 3) {
+                                                                                                minutes[rentalOption[i]['type_id']] = '5 mins';
+                                                                                              } else if (minDist > 3 && minDist <= 5) {
+                                                                                                minutes[rentalOption[i]['type_id']] = '8 mins';
+                                                                                              } else if (minDist > 5 && minDist <= 7) {
+                                                                                                minutes[rentalOption[i]['type_id']] = '11 mins';
+                                                                                              } else if (minDist > 7 && minDist <= 10) {
+                                                                                                minutes[rentalOption[i]['type_id']] = '14 mins';
+                                                                                              } else if (minDist > 10) {
+                                                                                                minutes[rentalOption[i]['type_id']] = '15 mins';
+                                                                                              }
+                                                                                            } else {
+                                                                                              minutes[rentalOption[i]['type_id']] = '';
+                                                                                            }
+                                                                                          }
+                                                                                        }
+                                                                                      },
+                                                                                    );
+                                                                                  } else {
+                                                                                    minutes[rentalOption[i]['type_id']] = '';
+                                                                                  }
+                                                                                } else {
+                                                                                  minutes[rentalOption[i]['type_id']] = '';
+                                                                                }
+                                                                                return InkWell(
+                                                                                    onTap: () {
+                                                                                      setState(() {
+                                                                                        choosenVehicle = i;
+                                                                                      });
+                                                                                    },
+                                                                                    child: Container(
+                                                                                      padding: EdgeInsets.all(media.width * 0.02),
+                                                                                      margin: EdgeInsets.only(top: 10, left: media.width * 0.05, right: media.width * 0.05),
+                                                                                      height: media.width * 0.152,
+                                                                                      decoration: BoxDecoration(
+                                                                                        borderRadius: BorderRadius.circular(12),
+                                                                                        boxShadow: [
+                                                                                          BoxShadow(color: (isDarkTheme == true) ? Colors.white.withOpacity(0.2) : Colors.black.withOpacity(0.2), spreadRadius: 2, blurRadius: 2)
+                                                                                        ],
+                                                                                        color: (choosenVehicle != i)
+                                                                                            ? (isDarkTheme == true)
+                                                                                            ? Colors.black
+                                                                                            : Colors.white
+                                                                                            : const Color(0xffF3F3F3),
+                                                                                      ),
+                                                                                      child: Row(
+                                                                                        children: [
+                                                                                          (rentalOption[i]['icon'] != null)
+                                                                                              ? SizedBox(
+                                                                                              width: media.width * 0.1,
+                                                                                              child: Image.network(
+                                                                                                rentalOption[i]['icon'],
+                                                                                                fit: BoxFit.contain,
+                                                                                              ))
+                                                                                              : Container(),
+                                                                                          SizedBox(
+                                                                                            width: media.width * 0.05,
+                                                                                          ),
+                                                                                          Column(
+                                                                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                                                                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                                                                             children: [
-                                                                                              Icon(
-                                                                                                Icons.timelapse,
-                                                                                                size: media.width * 0.04,
-                                                                                                color: const Color(0xff8A8A8A),
-                                                                                              ),
-                                                                                              SizedBox(
-                                                                                                width: media.width * 0.01,
-                                                                                              ),
-                                                                                              (minutes[rentalOption[i]['type_id']] != null && minutes[rentalOption[i]['type_id']] != '')
-                                                                                                  ? Text(
-                                                                                                minutes[rentalOption[i]['type_id']].toString(),
-                                                                                                style: GoogleFonts.notoSans(fontSize: media.width * twelve, color: const Color(0xff8A8A8A)),
-                                                                                              )
-                                                                                                  : Text(
-                                                                                                '- -',
-                                                                                                style: GoogleFonts.notoSans(
-                                                                                                    fontSize: media.width * twelve,
-                                                                                                    color: (choosenVehicle != i)
-                                                                                                        ? textColor.withOpacity(0.7)
-                                                                                                        : (isDarkTheme)
-                                                                                                        ? Colors.black
-                                                                                                        : hintColor.withOpacity(0.4)),
-                                                                                              ),
-                                                                                              SizedBox(
-                                                                                                width: media.width * 0.01,
-                                                                                              ),
-                                                                                              InkWell(
-                                                                                                  onTap: () {
-                                                                                                    setState(() {
-                                                                                                      _showInfoInt = i;
-                                                                                                      _showInfo = true;
-                                                                                                    });
-                                                                                                  },
-                                                                                                  child: Icon(
-                                                                                                    Icons.info_outline,
+                                                                                              Text(rentalOption[i]['name'],
+                                                                                                  style: GoogleFonts.notoSans(
+                                                                                                      fontSize: media.width * fourteen,
+                                                                                                      fontWeight: FontWeight.w600,
+                                                                                                      color: (choosenVehicle != i)
+                                                                                                          ? (isDarkTheme == true)
+                                                                                                          ? hintColor
+                                                                                                          : textColor
+                                                                                                          : Colors.black)),
+                                                                                              Row(
+                                                                                                children: [
+                                                                                                  Icon(
+                                                                                                    Icons.timelapse,
                                                                                                     size: media.width * 0.04,
                                                                                                     color: const Color(0xff8A8A8A),
-                                                                                                  ))
-                                                                                            ],
-                                                                                          ),
-                                                                                        ],
-                                                                                      ),
-                                                                                      Expanded(
-                                                                                          child: (rentalOption[i]['has_discount'] != true)
-                                                                                              ? Row(
-                                                                                            mainAxisAlignment: MainAxisAlignment.end,
-                                                                                            children: [
-                                                                                              Text(
-                                                                                                rentalOption[i]['currency'] + ' ' + rentalOption[i]['fare_amount'].toStringAsFixed(2),
-                                                                                                style: GoogleFonts.notoSans(
-                                                                                                    fontSize: media.width * fourteen,
-                                                                                                    fontWeight: FontWeight.w600,
-                                                                                                    color: (choosenVehicle != i)
-                                                                                                        ? (isDarkTheme == true)
-                                                                                                        ? Colors.white
-                                                                                                        : textColor
-                                                                                                        : Colors.black),
+                                                                                                  ),
+                                                                                                  SizedBox(
+                                                                                                    width: media.width * 0.01,
+                                                                                                  ),
+                                                                                                  (minutes[rentalOption[i]['type_id']] != null && minutes[rentalOption[i]['type_id']] != '')
+                                                                                                      ? Text(
+                                                                                                    minutes[rentalOption[i]['type_id']].toString(),
+                                                                                                    style: GoogleFonts.notoSans(fontSize: media.width * twelve, color: const Color(0xff8A8A8A)),
+                                                                                                  )
+                                                                                                      : Text(
+                                                                                                    '- -',
+                                                                                                    style: GoogleFonts.notoSans(
+                                                                                                        fontSize: media.width * twelve,
+                                                                                                        color: (choosenVehicle != i)
+                                                                                                            ? textColor.withOpacity(0.7)
+                                                                                                            : (isDarkTheme)
+                                                                                                            ? Colors.black
+                                                                                                            : hintColor.withOpacity(0.4)),
+                                                                                                  ),
+                                                                                                  SizedBox(
+                                                                                                    width: media.width * 0.01,
+                                                                                                  ),
+                                                                                                  InkWell(
+                                                                                                      onTap: () {
+                                                                                                        setState(() {
+                                                                                                          _showInfoInt = i;
+                                                                                                          _showInfo = true;
+                                                                                                        });
+                                                                                                      },
+                                                                                                      child: Icon(
+                                                                                                        Icons.info_outline,
+                                                                                                        size: media.width * 0.04,
+                                                                                                        color: const Color(0xff8A8A8A),
+                                                                                                      ))
+                                                                                                ],
                                                                                               ),
                                                                                             ],
-                                                                                          )
-                                                                                              : Row(
-                                                                                            mainAxisAlignment: MainAxisAlignment.end,
-                                                                                            children: [
-                                                                                              // Text(
-                                                                                              //   rentalOption[i]['currency'] + ' ',
-                                                                                              //   style: GoogleFonts.notoSans(fontSize: media.width * fourteen, color: (choosenVehicle != i) ? Colors.white : Colors.black, fontWeight: FontWeight.w600),
-                                                                                              // ),
-                                                                                              Column(
+                                                                                          ),
+                                                                                          Expanded(
+                                                                                              child: (rentalOption[i]['has_discount'] != true)
+                                                                                                  ? Row(
+                                                                                                mainAxisAlignment: MainAxisAlignment.end,
                                                                                                 children: [
                                                                                                   Text(
                                                                                                     rentalOption[i]['currency'] + ' ' + rentalOption[i]['fare_amount'].toStringAsFixed(2),
                                                                                                     style: GoogleFonts.notoSans(
                                                                                                         fontSize: media.width * fourteen,
-                                                                                                        color: (choosenVehicle != i)
-                                                                                                            ? (isDarkTheme == true)
-                                                                                                            ? Colors.white
-                                                                                                            : textColor
-                                                                                                            : Colors.black,
                                                                                                         fontWeight: FontWeight.w600,
-                                                                                                        decoration: TextDecoration.lineThrough),
-                                                                                                  ),
-                                                                                                  Text(
-                                                                                                    rentalOption[i]['currency'] + ' ' + rentalOption[i]['discounted_totel'].toStringAsFixed(2),
-                                                                                                    style: GoogleFonts.notoSans(
-                                                                                                        fontSize: media.width * fourteen,
                                                                                                         color: (choosenVehicle != i)
                                                                                                             ? (isDarkTheme == true)
                                                                                                             ? Colors.white
                                                                                                             : textColor
-                                                                                                            : Colors.black,
-                                                                                                        fontWeight: FontWeight.w600),
-                                                                                                  )
+                                                                                                            : Colors.black),
+                                                                                                  ),
                                                                                                 ],
-                                                                                              ),
-                                                                                            ],
-                                                                                          ))
-                                                                                    ],
-                                                                                  ),
-                                                                                ));
-                                                                          }));
-                                                                })
-                                                                    .values
-                                                                    .toList()),
+                                                                                              )
+                                                                                                  : Row(
+                                                                                                mainAxisAlignment: MainAxisAlignment.end,
+                                                                                                children: [
+                                                                                                  // Text(
+                                                                                                  //   rentalOption[i]['currency'] + ' ',
+                                                                                                  //   style: GoogleFonts.notoSans(fontSize: media.width * fourteen, color: (choosenVehicle != i) ? Colors.white : Colors.black, fontWeight: FontWeight.w600),
+                                                                                                  // ),
+                                                                                                  Column(
+                                                                                                    children: [
+                                                                                                      Text(
+                                                                                                        rentalOption[i]['currency'] + ' ' + rentalOption[i]['fare_amount'].toStringAsFixed(2),
+                                                                                                        style: GoogleFonts.notoSans(
+                                                                                                            fontSize: media.width * fourteen,
+                                                                                                            color: (choosenVehicle != i)
+                                                                                                                ? (isDarkTheme == true)
+                                                                                                                ? Colors.white
+                                                                                                                : textColor
+                                                                                                                : Colors.black,
+                                                                                                            fontWeight: FontWeight.w600,
+                                                                                                            decoration: TextDecoration.lineThrough),
+                                                                                                      ),
+                                                                                                      Text(
+                                                                                                        rentalOption[i]['currency'] + ' ' + rentalOption[i]['discounted_totel'].toStringAsFixed(2),
+                                                                                                        style: GoogleFonts.notoSans(
+                                                                                                            fontSize: media.width * fourteen,
+                                                                                                            color: (choosenVehicle != i)
+                                                                                                                ? (isDarkTheme == true)
+                                                                                                                ? Colors.white
+                                                                                                                : textColor
+                                                                                                                : Colors.black,
+                                                                                                            fontWeight: FontWeight.w600),
+                                                                                                      )
+                                                                                                    ],
+                                                                                                  ),
+                                                                                                ],
+                                                                                              ))
+                                                                                        ],
+                                                                                      ),
+                                                                                    ));
+                                                                              }));
+                                                                    })
+                                                                        .values
+                                                                        .toList()),
+                                                              ),
+                                                            ),
                                                           ),
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  )),
-                                            )
-                                                : Container(),
+                                                        ],
+                                                      )),
+                                                )
+                                                    : Container(),
 
-                                            SizedBox(
-                                              height: media.width * 0.02,
-                                            ),
+                                                SizedBox(
+                                                  height: media.width * 0.02,
+                                                ),
 
 
-                                            SizedBox(
-                                              height: media.width * 0.02,
-                                            ),
-                                            SizedBox(
-                                              height: media.width * 0.02,
-                                            ),
-                                            (choosenVehicle != null &&
-                                                widget.type != 1)
-                                                ? Container(
-                                              height:
-                                              media.width * 0.106,
-                                              width:
-                                              media.width * 0.9,
-                                              color: (isDarkTheme ==
-                                                  true)
-                                                  ? page
-                                                  : const Color(
-                                                  0xffF3F3F3),
-                                              child:
+                                                SizedBox(
+                                                  height: media.width * 0.02,
+                                                ),
+                                                SizedBox(
+                                                  height: media.width * 0.02,
+                                                ),
+                                                (choosenVehicle != null &&
+                                                    widget.type != 1)
+                                                    ? Container(
+                                                  height:
+                                                  media.width * 0.106,
+                                                  width:
+                                                  media.width * 0.9,
+                                                  color: (isDarkTheme ==
+                                                      true)
+                                                      ? page
+                                                      : const Color(
+                                                      0xffF3F3F3),
+                                                  child:
 
-                                              //payment section
-                                              SingleChildScrollView(
-                                                scrollDirection:
-                                                Axis.horizontal,
-                                                child: Row(
-                                                  children: etaDetails[
-                                                  choosenVehicle]
-                                                  [
-                                                  'payment_type']
-                                                      .toString()
-                                                      .split(',')
-                                                      .toList()
-                                                      .asMap()
-                                                      .map(
-                                                          (i, value) {
+                                                  //payment section
+                                                  SingleChildScrollView(
+                                                    scrollDirection:
+                                                    Axis.horizontal,
+                                                    child: Row(
+                                                      children: etaDetails[
+                                                      choosenVehicle]
+                                                      [
+                                                      'payment_type']
+                                                          .toString()
+                                                          .split(',')
+                                                          .toList()
+                                                          .asMap()
+                                                          .map(
+                                                              (i, value) {
+                                                            return MapEntry(
+                                                                i,
+                                                                InkWell(
+                                                                  onTap:
+                                                                      () {
+                                                                    setState(
+                                                                            () {
+                                                                          payingVia =
+                                                                              i;
+                                                                        });
+                                                                  },
+                                                                  child:
+                                                                  Container(
+                                                                    height:
+                                                                    media.width * 0.106,
+                                                                    width: etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList().length == 2
+                                                                        ? media.width * 0.45
+                                                                        : media.width * 0.3,
+                                                                    decoration:
+                                                                    BoxDecoration(border: Border(right: BorderSide(color: (i < etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList().length - 1) ? const Color(
+                                                                        0xffffffff).withOpacity(.24) : Colors.transparent, width: 1.1))),
+                                                                    child:
+                                                                    Row(
+                                                                      mainAxisAlignment:
+                                                                      MainAxisAlignment.center,
+                                                                      children: [
+                                                                        (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'cash')
+                                                                            ? Image.asset(
+                                                                          'assets/images/cash.png',
+                                                                          width: media.width * 0.037,
+                                                                          height: media.width * 0.037,
+                                                                          fit: BoxFit.contain,
+                                                                          color: (payingVia == i)
+                                                                              ? const Color(
+                                                                              0xffffffff)
+                                                                              : (isDarkTheme == true)
+                                                                              ? Colors.white24
+                                                                              : Colors.black,
+                                                                        )
+                                                                            : (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'wallet')
+                                                                            ? Image.asset(
+                                                                          'assets/images/wallet.png',
+                                                                          width: media.width * 0.037,
+                                                                          height: media.width * 0.037,
+                                                                          color: (payingVia == i)
+                                                                              ? const Color(
+                                                                              0xffffffff)
+                                                                              : (isDarkTheme == true)
+                                                                              ? Colors.white24
+                                                                              : Colors.black,
+                                                                          fit: BoxFit.contain,
+                                                                        )
+                                                                            : (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'card')
+                                                                            ? Image.asset(
+                                                                          'assets/images/card.png',
+                                                                          width: media.width * 0.037,
+                                                                          height: media.width * 0.037,
+                                                                          color: (payingVia == i)
+                                                                              ? const Color(
+                                                                              0xffffffff)
+                                                                              : (isDarkTheme == true)
+                                                                              ? Colors.white24
+                                                                              : Colors.black,
+                                                                          fit: BoxFit.contain,
+                                                                        )
+                                                                            : (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'upi')
+                                                                            ? Image.asset(
+                                                                          'assets/images/upi.png',
+                                                                          width: media.width * 0.037,
+                                                                          height: media.width * 0.037,
+                                                                          color: (payingVia == i)
+                                                                              ? const Color(
+                                                                              0xffffffff)
+                                                                              : (isDarkTheme == true)
+                                                                              ? Colors.white24
+                                                                              : Colors.black,
+                                                                          fit: BoxFit.contain,
+                                                                        )
+                                                                            : Container(),
+                                                                        SizedBox(
+                                                                          width: media.width * 0.02,
+                                                                        ),
+                                                                        MyText(
+                                                                          text: etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i],
+                                                                          size: media.width * fourteen,
+                                                                          color: (payingVia == i)
+                                                                              ? const Color(
+                                                                              0xffffffff)
+                                                                              : (isDarkTheme == true)
+                                                                              ? Colors.white24
+                                                                              : Colors.black,
+                                                                        )
+                                                                      ],
+                                                                    ),
+                                                                  ),
+                                                                ));
+                                                          })
+                                                          .values
+                                                          .toList(),
+                                                    ),
+                                                  ),
+                                                )
+                                                    : (choosenVehicle != null &&
+                                                    widget.type == 1)
+                                                    ? Container(
+                                                  height:
+                                                  media.width *
+                                                      0.106,
+                                                  width: media.width *
+                                                      0.9,
+                                                  color: (isDarkTheme ==
+                                                      true)
+                                                      ? page
+                                                      : const Color(
+                                                      0xffF3F3F3),
+                                                  child:
+                                                  SingleChildScrollView(
+                                                    scrollDirection:
+                                                    Axis.horizontal,
+                                                    child: Row(
+                                                      children: rentalOption[
+                                                      choosenVehicle]
+                                                      [
+                                                      'payment_type']
+                                                          .toString()
+                                                          .split(',')
+                                                          .toList()
+                                                          .asMap()
+                                                          .map((i,
+                                                          value) {
                                                         return MapEntry(
                                                             i,
                                                             InkWell(
                                                               onTap:
                                                                   () {
-                                                                setState(
-                                                                        () {
-                                                                      payingVia =
-                                                                          i;
-                                                                    });
+                                                                setState(() {
+                                                                  payingVia = i;
+                                                                });
                                                               },
                                                               child:
                                                               Container(
-                                                                height:
-                                                                media.width * 0.106,
-                                                                width: etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList().length == 2
-                                                                    ? media.width * 0.45
-                                                                    : media.width * 0.3,
-                                                                decoration:
-                                                                BoxDecoration(border: Border(right: BorderSide(color: (i < etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList().length - 1) ? const Color(
-                                                                    0xffffffff).withOpacity(.24) : Colors.transparent, width: 1.1))),
-                                                                child:
-                                                                Row(
-                                                                  mainAxisAlignment:
-                                                                  MainAxisAlignment.center,
+                                                                height: media.width * 0.106,
+                                                                width: media.width * 0.3,
+                                                                decoration: BoxDecoration(border: Border(right: BorderSide(color: (i < rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList().length - 1) ? const Color(0xffE7EDEF) : Colors.transparent, width: 1.1))),
+                                                                child: Row(
+                                                                  mainAxisAlignment: MainAxisAlignment.center,
                                                                   children: [
-                                                                    (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'cash')
+                                                                    (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'cash')
                                                                         ? Image.asset(
                                                                       'assets/images/cash.png',
                                                                       width: media.width * 0.037,
                                                                       height: media.width * 0.037,
                                                                       fit: BoxFit.contain,
-                                                                      color: (payingVia == i)
-                                                                          ? const Color(
-                                                                          0xffffffff)
-                                                                          : (isDarkTheme == true)
-                                                                          ? Colors.white24
-                                                                          : Colors.black,
+                                                                      color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
                                                                     )
-                                                                        : (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'wallet')
+                                                                        : (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'wallet')
                                                                         ? Image.asset(
                                                                       'assets/images/wallet.png',
                                                                       width: media.width * 0.037,
                                                                       height: media.width * 0.037,
-                                                                      color: (payingVia == i)
-                                                                          ? const Color(
-                                                                          0xffffffff)
-                                                                          : (isDarkTheme == true)
-                                                                          ? Colors.white24
-                                                                          : Colors.black,
+                                                                      color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
                                                                       fit: BoxFit.contain,
                                                                     )
-                                                                        : (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'card')
+                                                                        : (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'card')
                                                                         ? Image.asset(
                                                                       'assets/images/card.png',
                                                                       width: media.width * 0.037,
                                                                       height: media.width * 0.037,
-                                                                      color: (payingVia == i)
-                                                                          ? const Color(
-                                                                          0xffffffff)
-                                                                          : (isDarkTheme == true)
-                                                                          ? Colors.white24
-                                                                          : Colors.black,
+                                                                      color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
                                                                       fit: BoxFit.contain,
                                                                     )
-                                                                        : (etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'upi')
+                                                                        : (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'upi')
                                                                         ? Image.asset(
                                                                       'assets/images/upi.png',
                                                                       width: media.width * 0.037,
                                                                       height: media.width * 0.037,
-                                                                      color: (payingVia == i)
-                                                                          ? const Color(
-                                                                          0xffffffff)
-                                                                          : (isDarkTheme == true)
-                                                                          ? Colors.white24
-                                                                          : Colors.black,
+                                                                      color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
                                                                       fit: BoxFit.contain,
                                                                     )
                                                                         : Container(),
@@ -3167,126 +3313,374 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                                       width: media.width * 0.02,
                                                                     ),
                                                                     MyText(
-                                                                      text: etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[i],
+                                                                      text: rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i],
                                                                       size: media.width * fourteen,
-                                                                      color: (payingVia == i)
-                                                                          ? const Color(
-                                                                          0xffffffff)
-                                                                          : (isDarkTheme == true)
-                                                                          ? Colors.white24
-                                                                          : Colors.black,
+                                                                      color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
                                                                     )
                                                                   ],
                                                                 ),
                                                               ),
                                                             ));
                                                       })
-                                                      .values
-                                                      .toList(),
-                                                ),
-                                              ),
-                                            )
-                                                : (choosenVehicle != null &&
-                                                widget.type == 1)
-                                                ? Container(
-                                              height:
-                                              media.width *
-                                                  0.106,
-                                              width: media.width *
-                                                  0.9,
-                                              color: (isDarkTheme ==
-                                                  true)
-                                                  ? page
-                                                  : const Color(
-                                                  0xffF3F3F3),
-                                              child:
-                                              SingleChildScrollView(
-                                                scrollDirection:
-                                                Axis.horizontal,
-                                                child: Row(
-                                                  children: rentalOption[
-                                                  choosenVehicle]
-                                                  [
-                                                  'payment_type']
-                                                      .toString()
-                                                      .split(',')
-                                                      .toList()
-                                                      .asMap()
-                                                      .map((i,
-                                                      value) {
-                                                    return MapEntry(
-                                                        i,
-                                                        InkWell(
-                                                          onTap:
-                                                              () {
-                                                            setState(() {
-                                                              payingVia = i;
-                                                            });
+                                                          .values
+                                                          .toList(),
+                                                    ),
+                                                  ),
+                                                )
+                                                    : Container(),
+                                                //(choosenVehicle != null &&
+                                                //    widget.type != 2)
+                                                //     ? InkWell(
+                                                //   onTap: () {
+                                                //     setState(() {
+                                                //       _addCoupon = true;
+                                                //     });
+                                                //   },
+                                                //   child:
+                                                //   (_addCoupon ==
+                                                //       false)
+                                                //       ? Container(
+                                                //     height: media
+                                                //         .width *
+                                                //         0.106,
+                                                //     width: media
+                                                //         .width *
+                                                //         0.9,
+                                                //     decoration:
+                                                //     const BoxDecoration(
+                                                //         border:
+                                                //         Border(bottom: BorderSide(color: Color(0xffF3F3F3), width: 1.1))),
+                                                //     child: Row(
+                                                //       mainAxisAlignment:
+                                                //       MainAxisAlignment
+                                                //           .spaceBetween,
+                                                //       children: [
+                                                //         MyText(
+                                                //           text: languages[choosenLanguage]
+                                                //           [
+                                                //           'text_coupons'],
+                                                //           size: media.width *
+                                                //               fourteen,
+                                                //           fontweight:
+                                                //           FontWeight.w600,
+                                                //         ),
+                                                //         Icon(
+                                                //           Icons
+                                                //               .arrow_forward_ios,
+                                                //           color:
+                                                //           textColor,
+                                                //           size: media.width *
+                                                //               0.04,
+                                                //         )
+                                                //       ],
+                                                //     ),
+                                                //   )
+                                                //       : Container(
+                                                //     padding: EdgeInsets.only(
+                                                //         top: media.width *
+                                                //             0.02),
+                                                //     height: media
+                                                //         .width *
+                                                //         0.106,
+                                                //     width: media
+                                                //         .width *
+                                                //         0.9,
+                                                //     color: (isDarkTheme ==
+                                                //         true)
+                                                //         ? Colors
+                                                //         .black
+                                                //         : const Color(
+                                                //         0xffF3F3F3),
+                                                //     child: Row(
+                                                //       mainAxisAlignment:
+                                                //       MainAxisAlignment
+                                                //           .spaceEvenly,
+                                                //       children: [
+                                                //         SizedBox(
+                                                //           width:
+                                                //           media.width * 0.25,
+                                                //           child:
+                                                //           Row(
+                                                //             children: [
+                                                //               MyText(text: languages[choosenLanguage]['text_coupons'], size: media.width * fourteen, color: textColor),
+                                                //               Icon(
+                                                //                 Icons.card_giftcard_outlined,
+                                                //                 size: media.width * fourteen,
+                                                //                 color: (isDarkTheme == true) ? const Color(0xFFFF0000) : buttonColor,
+                                                //               )
+                                                //             ],
+                                                //           ),
+                                                //         ),
+                                                //         (promoStatus !=
+                                                //             1)
+                                                //             ? Container(
+                                                //           width: media.width * 0.25,
+                                                //           height: media.width * 0.090,
+                                                //           padding: EdgeInsets.all(media.width * 0.010),
+                                                //           decoration: BoxDecoration(color: page, border: Border.all(color: textColor.withOpacity(0.4)), borderRadius: BorderRadius.circular(media.width * 0.02)),
+                                                //           child: TextField(
+                                                //             controller: promoKey,
+                                                //             decoration: const InputDecoration(border: InputBorder.none),
+                                                //             style: GoogleFonts.notoSans(color: textColor),
+                                                //             onChanged: (val) {
+                                                //               promoCode = val;
+                                                //             },
+                                                //           ),
+                                                //         )
+                                                //             : const Icon(
+                                                //           Icons.done,
+                                                //           color: Colors.green,
+                                                //         ),
+                                                //         SizedBox(
+                                                //           width:
+                                                //           media.width * 0.25,
+                                                //           height:
+                                                //           media.width * 0.090,
+                                                //           child:
+                                                //           Button(
+                                                //             text: (promoStatus != 1)
+                                                //                 ? languages[choosenLanguage]['text_apply']
+                                                //                 : languages[choosenLanguage]['text_remove'],
+                                                //             fontweight:
+                                                //             FontWeight.w500,
+                                                //             onTap:
+                                                //                 () async {
+                                                //               FocusScope.of(context).unfocus();
+                                                //               setState(() {
+                                                //                 _isLoading = true;
+                                                //               });
+                                                //               if (promoStatus != 1) {
+                                                //                 setState(() {
+                                                //                   promoStatus = null;
+                                                //                 });
+                                                //                 if (widget.type != 1 && promoKey.text.isNotEmpty) {
+                                                //                   await etaRequestWithPromo();
+                                                //                 } else if (widget.type == 1 && promoKey.text.isNotEmpty) {
+                                                //                   await rentalRequestWithPromo();
+                                                //                 }
+                                                //               } else {
+                                                //                 promoKey.text = '';
+                                                //                 promoStatus = null;
+                                                //                 if (widget.type != 1) {
+                                                //                   await etaRequest();
+                                                //                 } else if (widget.type == 1) {
+                                                //                   await rentalEta();
+                                                //                 }
+                                                //               }
+                                                //               setState(() {
+                                                //                 _isLoading = false;
+                                                //               });
+                                                //             },
+                                                //             color:
+                                                //             const Color(0xffFF0000),
+                                                //             textcolor:
+                                                //             Colors.black,
+                                                //             borderRadius:
+                                                //             12.0,
+                                                //           ),
+                                                //         ),
+                                                //         InkWell(
+                                                //             onTap:
+                                                //                 () {
+                                                //               if (widget.type == 1 ? (rentalOption[choosenVehicle]['has_discount'] == true) : etaDetails[choosenVehicle]['has_discount'] == true) {
+                                                //                 setState(() {
+                                                //                   promoStatus = 1;
+                                                //                   _addCoupon = false;
+                                                //                   // promoKey.clear();
+                                                //                 });
+                                                //               } else {
+                                                //                 setState(() {
+                                                //                   promoStatus = null;
+                                                //                   _addCoupon = false;
+                                                //                   promoKey.clear();
+                                                //                 });
+                                                //               }
+                                                //             },
+                                                //             child:
+                                                //             const Icon(
+                                                //               Icons.cancel,
+                                                //               color: Color(0xffFF0000),
+                                                //             ))
+                                                //       ],
+                                                //     ),
+                                                //   ),
+                                                // )
+                                                //    : Container(),
+                                                if (promoStatus != null &&
+                                                    promoStatus == 2)
+                                                  Container(
+                                                    width: media.width * 0.9,
+                                                    padding: EdgeInsets.only(
+                                                        top: media.width *
+                                                            0.025),
+                                                    child: MyText(
+                                                      text: languages[
+                                                      choosenLanguage][
+                                                      'text_promorejected'],
+                                                      size:
+                                                      media.width * twelve,
+                                                      color: Colors.red,
+                                                    ),
+                                                  ),
+                                                (choosenVehicle != null)
+                                                    ? SizedBox(
+                                                  height:
+                                                  media.width * 0.025,
+                                                )
+                                                    : Container(),
+                                                SizedBox(
+                                                  width: media.width * 0.9,
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                    MainAxisAlignment
+                                                        .spaceBetween,
+                                                    children: [
+                                                      (userDetails[
+                                                      'show_ride_later_feature'] ==
+                                                          true)
+                                                          ? Button(
+                                                          color: page,
+                                                          borcolor:
+                                                          buttonColor,
+                                                          textcolor:
+                                                          buttonColor,
+                                                          width:
+                                                          media.width *
+                                                              0.42,
+                                                          onTap: () async {
+                                                            if (((rentalOption.isEmpty && (etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['total'] && etaDetails[choosenVehicle]['has_discount'] == false) || (rentalOption.isEmpty && etaDetails[choosenVehicle]['has_discount'] == true && etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['discounted_totel'])) ||
+                                                                (rentalOption.isEmpty &&
+                                                                    etaDetails[choosenVehicle]['payment_type'].toString().split(',').toList()[payingVia] !=
+                                                                        'wallet')) ||
+                                                                ((rentalOption.isNotEmpty && (etaDetails[0]['user_wallet_balance'] >= rentalOption[choosenVehicle]['fare_amount']) && rentalOption[choosenVehicle]['has_discount'] == false) ||
+                                                                    (rentalOption.isNotEmpty &&
+                                                                        rentalOption[choosenVehicle]['has_discount'] ==
+                                                                            true &&
+                                                                        etaDetails[0]['user_wallet_balance'] >=
+                                                                            rentalOption[choosenVehicle][
+                                                                            'discounted_totel']) ||
+                                                                    rentalOption.isNotEmpty &&
+                                                                        rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[payingVia] !=
+                                                                            'wallet')) {
+                                                              if (choosenVehicle !=
+                                                                  null) {
+                                                                setState(
+                                                                        () {
+                                                                      choosenDateTime = DateTime
+                                                                          .now()
+                                                                          .add(Duration(
+                                                                          minutes: int.parse(userDetails['user_can_make_a_ride_after_x_miniutes'])));
+                                                                      _dateTimePicker =
+                                                                      true;
+                                                                    });
+                                                              }
+                                                            } else {
+                                                              setState(() {
+                                                                islowwalletbalance =
+                                                                true;
+                                                              });
+                                                            }
                                                           },
-                                                          child:
-                                                          Container(
-                                                            height: media.width * 0.106,
-                                                            width: media.width * 0.3,
-                                                            decoration: BoxDecoration(border: Border(right: BorderSide(color: (i < rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList().length - 1) ? const Color(0xffE7EDEF) : Colors.transparent, width: 1.1))),
-                                                            child: Row(
-                                                              mainAxisAlignment: MainAxisAlignment.center,
-                                                              children: [
-                                                                (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'cash')
-                                                                    ? Image.asset(
-                                                                  'assets/images/cash.png',
-                                                                  width: media.width * 0.037,
-                                                                  height: media.width * 0.037,
-                                                                  fit: BoxFit.contain,
-                                                                  color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
-                                                                )
-                                                                    : (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'wallet')
-                                                                    ? Image.asset(
-                                                                  'assets/images/wallet.png',
-                                                                  width: media.width * 0.037,
-                                                                  height: media.width * 0.037,
-                                                                  color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
-                                                                  fit: BoxFit.contain,
-                                                                )
-                                                                    : (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'card')
-                                                                    ? Image.asset(
-                                                                  'assets/images/card.png',
-                                                                  width: media.width * 0.037,
-                                                                  height: media.width * 0.037,
-                                                                  color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
-                                                                  fit: BoxFit.contain,
-                                                                )
-                                                                    : (rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i] == 'upi')
-                                                                    ? Image.asset(
-                                                                  'assets/images/upi.png',
-                                                                  width: media.width * 0.037,
-                                                                  height: media.width * 0.037,
-                                                                  color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
-                                                                  fit: BoxFit.contain,
-                                                                )
-                                                                    : Container(),
-                                                                SizedBox(
-                                                                  width: media.width * 0.02,
-                                                                ),
-                                                                MyText(
-                                                                  text: rentalOption[choosenVehicle]['payment_type'].toString().split(',').toList()[i],
-                                                                  size: media.width * fourteen,
-                                                                  color: (payingVia == i) ? const Color(0xffFF0000) : Colors.black,
-                                                                )
-                                                              ],
-                                                            ),
-                                                          ),
-                                                        ));
-                                                  })
-                                                      .values
-                                                      .toList(),
-                                                ),
-                                              ),
-                                            )
-                                                : Container(),
+                                                          text: languages[
+                                                          choosenLanguage]
+                                                          [
+                                                          'text_ridelater'])
+                                                          : Container(),
+                                                      Button(
+                                                        width: ((userDetails['show_ride_later_feature'] == true))
+                                                            ? media.width * 0.42
+                                                            : media.width * 0.89,
+                                                        color: buttonColor,
+                                                        onTap: () async {
+                                                          if ((widget.type == 2) ||
+                                                              (((rentalOption.isEmpty && (etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['total'] && etaDetails[choosenVehicle]['has_discount'] == false) || (rentalOption.isEmpty && etaDetails[choosenVehicle]['has_discount'] == true && etaDetails[choosenVehicle]['user_wallet_balance'] >= etaDetails[choosenVehicle]['discounted_totel'])) ||
+                                                                  (rentalOption.isEmpty &&
+                                                                      etaDetails[choosenVehicle]['payment_type']
+                                                                          .toString()
+                                                                          .split(',')
+                                                                          .toList()[payingVia] != 'wallet')) ||
+                                                                  ((rentalOption.isNotEmpty &&
+                                                                      (etaDetails[0]['user_wallet_balance'] >= rentalOption[choosenVehicle]['fare_amount']) &&
+                                                                      rentalOption[choosenVehicle]['has_discount'] == false) ||
+                                                                      (rentalOption.isNotEmpty &&
+                                                                          rentalOption[choosenVehicle]['has_discount'] ==
+                                                                              true &&
+                                                                          etaDetails[0]['user_wallet_balance'] >=
+                                                                              rentalOption[choosenVehicle]['discounted_totel']) ||
+                                                                      rentalOption.isNotEmpty &&
+                                                                          rentalOption[choosenVehicle]['payment_type']
+                                                                              .toString()
+                                                                              .split(',')
+                                                                              .toList()[payingVia] != 'wallet'))) {
+                                                            setState(() {
+                                                              _isLoading = true;
+                                                            });
+                                                            dropStopList.clear();
+                                                            dynamic result;
+                                                            if (choosenVehicle != null) {
+                                                              if (widget.type != 1) {
+                                                                if (etaDetails[choosenVehicle]['has_discount'] == false) {
+                                                                  if (addressList.length > 2) {
+                                                                    for (var i = 1; i < addressList.length; i++) {
+                                                                      dropStopList.add(DropStops(
+                                                                          order: i.toString(),
+                                                                          latitude: addressList[i].latlng.latitude,
+                                                                          longitude: addressList[i].latlng.longitude,
+                                                                          address: addressList[i].address));
+                                                                    }
+                                                                  }
+                                                                  result = await createRequest();
+                                                                  if (result == 'logout') {
+                                                                    navigateLogout();
+                                                                  }
+                                                                } else {
+                                                                  if (addressList.length > 2) {
+                                                                    for (var i = 1; i < addressList.length; i++) {
+                                                                      dropStopList.add(DropStops(
+                                                                          order: i.toString(),
+                                                                          latitude: addressList[i].latlng.latitude,
+                                                                          longitude: addressList[i].latlng.longitude,
+                                                                          address: addressList[i].address));
+                                                                    }
+                                                                  }
+                                                                  result = await createRequestWithPromo();
+                                                                  if (result == 'logout') {
+                                                                    navigateLogout();
+                                                                  }
+                                                                }
+                                                              } else {
+                                                                if (rentalOption[choosenVehicle]['has_discount'] == false) {
+                                                                  result = await createRentalRequest();
+                                                                  if (result == 'logout') {
+                                                                    navigateLogout();
+                                                                  }
+                                                                } else {
+                                                                  result = await createRentalRequestWithPromo();
+                                                                  if (result == 'logout') {
+                                                                    navigateLogout();
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                            if (result == 'success') {
+                                                              timer();
+                                                            }
+                                                            setState(() {
+                                                              _isLoading = false;
+                                                            });
+                                                          } else {
+                                                            setState(() {
+                                                              islowwalletbalance = true;
+                                                            });
+                                                          }
+                                                        },
+                                                        text: languages[choosenLanguage]['text_book_now'],
+                                                      ),
 
-                                          ],
-                                        ),
-                                      ))
+
+                                                    ],
+                                                  ),
+                                                ) ]) ))
                                       : Container(),
 
                                   //show vehicle info
@@ -6198,7 +6592,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                       BoxDecoration(
                                                           shape: BoxShape
                                                               .circle,
-                                                          color: page),
+                                                          color: Colors.white30),
                                                       child: InkWell(
                                                           onTap: () {
                                                             setState(() {
@@ -6288,7 +6682,7 @@ class _BookingConfirmationState extends State<BookingConfirmation>
                                                     BoxDecoration(
                                                         shape: BoxShape
                                                             .circle,
-                                                        color: page),
+                                                        color: Colors.white),
                                                     child: InkWell(
                                                         onTap: () {
                                                           setState(() {
@@ -7853,3 +8247,4 @@ class _BookingConfirmationState extends State<BookingConfirmation>
     animationController.forward();
   }
 }
+
